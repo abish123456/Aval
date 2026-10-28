@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useCart } from '@/context/CartContext'
 import { PRODUCTS, Product } from '@/lib/data'
@@ -275,11 +275,18 @@ export default function AccountPage() {
     return baseOrders
   })
 
-  // Calculate days until wedding
-  const weddingDaysRemaining = Math.max(
-    0,
-    Math.ceil((new Date(profile.weddingDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-  )
+  // Calculate days until wedding (deferred to useEffect to avoid unstable new Date() during prerendering)
+  const [weddingDaysRemaining, setWeddingDaysRemaining] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (profile.weddingDate) {
+      const remaining = Math.max(
+        0,
+        Math.ceil((new Date(profile.weddingDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+      )
+      setWeddingDaysRemaining(remaining)
+    }
+  }, [profile.weddingDate])
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -540,7 +547,7 @@ export default function AccountPage() {
               {new Date(profile.weddingDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--ok)', fontWeight: 600 }}>
-              🌸 {weddingDaysRemaining} days to go
+              🌸 {weddingDaysRemaining !== null ? `${weddingDaysRemaining} days to go` : 'Upcoming'}
             </div>
           </div>
 

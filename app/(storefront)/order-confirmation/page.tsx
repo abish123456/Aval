@@ -43,11 +43,7 @@ function OrderConfirmationContent() {
   }>(() => {
     const defaultOrder = {
       orderNumber,
-      createdAt: new Date().toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      }),
+      createdAt: '28 Oct 2026',
       customer: {
         fullName: 'Priya Sundaram',
         email: 'priya.sundaram@gmail.com',
