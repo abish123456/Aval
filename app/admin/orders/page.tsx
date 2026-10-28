@@ -48,7 +48,7 @@ export default function AdminOrdersPage() {
       </div>
 
       {/* Filter Tabs */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', borderBottom: '1px solid var(--bd)', paddingBottom: '12px' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', borderBottom: '1px solid var(--bd)', paddingBottom: '12px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
         {(['ALL', 'PROCESSING', 'HANDCRAFTING', 'SHIPPED', 'DELIVERED'] as const).map((tab) => (
           <button
             key={tab}

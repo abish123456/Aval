@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 
 function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN')
@@ -40,69 +40,73 @@ function OrderConfirmationContent() {
     total: number
     paymentMethod: string
     paymentStatus: string
-  }>({
-    orderNumber,
-    createdAt: new Date().toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }),
-    customer: {
-      fullName: 'Priya Sundaram',
-      email: 'priya.sundaram@gmail.com',
-      phone: '9840212345',
-      street: '14, Beach Road, Near Cape Point',
-      city: 'Kanyakumari',
-      state: 'Tamil Nadu',
-      pincode: '629702',
-      notes: 'Bridal Muhurtham order',
-    },
-    items: [
-      {
-        id: 'item-1',
-        product: {
-          name: 'Kundan Royal Bridal Bangle Set',
-          images: [
-            '/images/kundan_set.jpg',
-          ],
-        },
-        size: '2.6',
-        customName: 'Priya & Karthik',
-        weddingDate: '18 Nov 2026',
-        quantity: 1,
-        price: 2099,
+  }>(() => {
+    const defaultOrder = {
+      orderNumber,
+      createdAt: new Date().toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+      customer: {
+        fullName: 'Priya Sundaram',
+        email: 'priya.sundaram@gmail.com',
+        phone: '9840212345',
+        street: '14, Beach Road, Near Cape Point',
+        city: 'Kanyakumari',
+        state: 'Tamil Nadu',
+        pincode: '629702',
+        notes: 'Bridal Muhurtham order',
       },
-      {
-        id: 'item-2',
-        product: {
-          name: 'Freshwater Pearl Bridal Hair Clip',
-          images: [
-            '/images/pearl_hair_clip.jpg',
-          ],
+      items: [
+        {
+          id: 'item-1',
+          product: {
+            name: 'Kundan Royal Bridal Bangle Set',
+            images: [
+              '/images/kundan_set.jpg',
+            ],
+          },
+          size: '2.6',
+          customName: 'Priya & Karthik',
+          weddingDate: '18 Nov 2026',
+          quantity: 1,
+          price: 2099,
         },
-        size: 'Standard (12cm)',
-        quantity: 1,
-        price: 699,
-      },
-    ],
-    subtotal: 2798,
-    discount: 300,
-    shipping: 0,
-    total: 2498,
-    paymentMethod: 'Razorpay UPI',
-    paymentStatus: 'PAID',
-  })
-
-  useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem('last_order')
-      if (stored) {
-        setOrder(JSON.parse(stored))
-      }
-    } catch {
-      // ignore
+        {
+          id: 'item-2',
+          product: {
+            name: 'Freshwater Pearl Bridal Hair Clip',
+            images: [
+              '/images/pearl_hair_clip.jpg',
+            ],
+          },
+          size: 'Standard (12cm)',
+          quantity: 1,
+          price: 699,
+        },
+      ],
+      subtotal: 2798,
+      discount: 300,
+      shipping: 0,
+      total: 2498,
+      paymentMethod: 'Razorpay UPI',
+      paymentStatus: 'PAID',
     }
-  }, [])
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('last_order')
+        if (stored) {
+          return JSON.parse(stored)
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return defaultOrder
+  })
 
   return (
     <div className="container" style={{ paddingTop: '50px', paddingBottom: '90px' }}>

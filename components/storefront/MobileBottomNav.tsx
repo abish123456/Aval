@@ -5,6 +5,16 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCart } from '@/context/CartContext'
 
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ReactNode
+  exact?: boolean
+  badge?: string
+  count?: number
+  external?: boolean
+}
+
 function MobileBottomNavContent() {
   const pathname = usePathname()
   const { itemCount } = useCart()
@@ -14,7 +24,7 @@ function MobileBottomNavContent() {
     return null
   }
 
-  const navItems = [
+  const navItems: NavItem[] = [
     {
       href: '/',
       label: 'Home',
@@ -61,12 +71,12 @@ function MobileBottomNavContent() {
       ),
     },
     {
-      href: 'https://wa.me/919876543210?text=Hi%20AVAL%20Store%2C%20I%20would%20like%20to%20enquire%20about%20bridal%20accessories',
-      label: 'WhatsApp',
-      external: true,
+      href: '/account',
+      label: 'Account',
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
         </svg>
       ),
     },

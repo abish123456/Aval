@@ -44,7 +44,7 @@ export default function Header() {
             <span style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 700, letterSpacing: '0.12em', color: 'var(--pr)', lineHeight: 1 }}>
               AVAL
             </span>
-            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '7px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--tx2)', marginTop: '2px' }}>
+            <span className="desktop-only-text" style={{ fontFamily: 'var(--font-sans)', fontSize: '7px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--tx2)', marginTop: '2px' }}>
               KANYAKUMARI • HANDCRAFTED
             </span>
           </div>
@@ -61,6 +61,31 @@ export default function Header() {
 
         {/* Actions */}
         <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '14px', marginLeft: 'auto' }}>
+          <Link
+            href="/wishlist"
+            className="desktop-only"
+            aria-label="Wishlist"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none', color: 'inherit', padding: '6px' }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+            </svg>
+            <span className="desktop-only-text" style={{ fontSize: '13px', fontWeight: 500 }}>Wishlist</span>
+          </Link>
+
+          <Link
+            href="/account"
+            className="desktop-only"
+            aria-label="My Account"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none', color: 'inherit', padding: '6px' }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <span className="desktop-only-text" style={{ fontSize: '13px', fontWeight: 500 }}>Account</span>
+          </Link>
+
           <Link href="/cart" aria-label="Cart" style={{ display: 'flex', alignItems: 'center', gap: '6px', position: 'relative', textDecoration: 'none', color: 'inherit', padding: '6px' }}>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -234,6 +259,12 @@ export default function Header() {
               Bridal Support
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+              <Link href="/account" onClick={() => setMobileOpen(false)} style={{ color: 'var(--tx)', textDecoration: 'none', fontWeight: 600 }}>
+                👤 My Bridal Account &amp; Quotes
+              </Link>
+              <Link href="/wishlist" onClick={() => setMobileOpen(false)} style={{ color: 'var(--tx)', textDecoration: 'none' }}>
+                ❤️ Saved Wishlist
+              </Link>
               <Link href="/track-order" onClick={() => setMobileOpen(false)} style={{ color: 'var(--tx)', textDecoration: 'none' }}>
                 📦 Track Your Order
               </Link>

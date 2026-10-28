@@ -193,7 +193,7 @@ export default function ShopPage() {
                 className="input"
                 style={{ padding: '6px 12px', fontSize: '13px', width: 'auto', borderRadius: 0 }}
                 value={selectedSort}
-                onChange={(e) => setSelectedSort(e.target.value as any)}
+                onChange={(e) => setSelectedSort(e.target.value as 'featured' | 'low-high' | 'high-low')}
               >
                 <option value="featured">Featured / Best Sellers</option>
                 <option value="low-high">Price: Low to High</option>

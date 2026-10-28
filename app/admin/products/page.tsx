@@ -213,7 +213,7 @@ export default function AdminProductsPage() {
                 />
               </label>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
                 <label className="input-label" style={{ fontSize: '13px' }}>
                   Category
                   <select
@@ -244,7 +244,7 @@ export default function AdminProductsPage() {
                 </label>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
                 <label className="input-label" style={{ fontSize: '13px' }}>
                   Regular Price (₹) *
                   <input

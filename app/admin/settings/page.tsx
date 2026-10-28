@@ -51,7 +51,7 @@ export default function AdminSettingsPage() {
               />
             </label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
               <label className="input-label" style={{ fontSize: '13px' }}>
                 Customer Support Email
                 <input
@@ -117,7 +117,7 @@ export default function AdminSettingsPage() {
           <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', marginBottom: '16px' }}>
             Shipping Rules
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
             <label className="input-label" style={{ fontSize: '13px' }}>
               Free Shipping Threshold (₹)
               <input

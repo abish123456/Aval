@@ -33,21 +33,21 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([])
+  const [items, setItems] = useState<CartItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('aval_cart')
+        if (stored) {
+          return JSON.parse(stored)
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return []
+  })
   const [couponCode, setCouponCode] = useState('')
   const [couponDiscount, setCouponDiscount] = useState(0)
-
-  // Initialize from localStorage on client
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('aval_cart')
-      if (stored) {
-        setItems(JSON.parse(stored))
-      }
-    } catch {
-      // ignore
-    }
-  }, [])
 
   // Persist to localStorage
   useEffect(() => {
