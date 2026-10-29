@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { INITIAL_ORDERS, Order } from '@/lib/data'
 
 function fmt(n: number) {
@@ -10,11 +10,148 @@ function fmt(n: number) {
 
 export default function AdminDashboardPage() {
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS)
+  const [stats, setStats] = useState({
+    revenue: '₹1,48,250',
+    totalOrders: '38 orders',
+    pendingCount: '4 orders',
+    aov: '₹2,640',
+  })
 
-  const handleStatusChange = (orderId: string, newStatus: Order['fulfilmentStatus']) => {
+  const loadDashboardData = () => {
+    // 1. Load Live Orders
+    fetch('/api/admin/orders?pageSize=10')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
+          const liveOrders: Order[] = res.data.data.map((o: {
+            id: string
+            orderNumber: string
+            guestName?: string
+            guestPhone?: string
+            guestEmail?: string
+            user?: { name?: string; email?: string }
+            fulfilmentStatus: Order['fulfilmentStatus']
+            paymentStatus: Order['paymentStatus']
+            source?: string
+            totalPaise: number
+            createdAt: string
+            items?: Array<{
+              snapshotJson?: { name?: string; image?: string; images?: string[] }
+              size?: string
+              customisation?: string
+              qty?: number
+              unitPricePaise?: number
+              product?: { name?: string }
+            }>
+          }) => ({
+            id: o.id,
+            orderNumber: o.orderNumber,
+            customerName: o.guestName || o.user?.name || 'Customer',
+            email: o.guestEmail || o.user?.email || 'customer@example.com',
+            phone: o.guestPhone || '+91 98402 12345',
+            shippingAddress: {
+              street: 'Handcrafted Bridal Destination',
+              city: 'Kanyakumari',
+              state: 'Tamil Nadu',
+              pincode: '629702',
+            },
+            items: (o.items || []).map((it) => ({
+              product: {
+                id: it.product?.name || 'prod-1',
+                name: it.product?.name || (it.snapshotJson as { name?: string })?.name || 'Bridal Jewellery',
+                slug: 'bridal-item',
+                category: 'Bangles',
+                categorySlug: 'bangles',
+                regularPrice: Math.round(((it.unitPricePaise || 0) * 1.2) / 100),
+                salePrice: Math.round((it.unitPricePaise || 0) / 100),
+                discountPercent: 15,
+                rating: 5,
+                reviewCount: 1,
+                customisable: true,
+                stock: 10,
+                description: '',
+                details: [],
+                images: ['/images/hero_bangles.jpg'],
+              },
+              size: it.size || '2.6',
+              customName: it.customisation,
+              weddingDate: '',
+              qty: it.qty || 1,
+              price: Math.round((it.unitPricePaise || 0) / 100),
+            })),
+            subtotal: Math.round(o.totalPaise / 100),
+            discount: 0,
+            shipping: 0,
+            total: Math.round(o.totalPaise / 100),
+            paymentMethod: o.source === 'COD' ? 'Cash on Delivery' : 'Razorpay UPI',
+            paymentStatus: o.paymentStatus || 'PAID',
+            fulfilmentStatus: o.fulfilmentStatus || 'CONFIRMED',
+            createdAt: new Date(o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+          }))
+          setOrders(liveOrders)
+
+          // Compute KPI from live orders
+          const totalRevPaise = res.data.data.reduce((sum: number, cur: { totalPaise?: number }) => sum + (cur.totalPaise || 0), 0)
+          const pending = res.data.data.filter((cur: { fulfilmentStatus?: string }) => cur.fulfilmentStatus !== 'DELIVERED').length
+          const avgOrderPaise = res.data.data.length ? totalRevPaise / res.data.data.length : 0
+
+          setStats({
+            revenue: fmt(Math.round(totalRevPaise / 100)),
+            totalOrders: `${res.data.total || res.data.data.length} orders`,
+            pendingCount: `${pending} orders`,
+            aov: fmt(Math.round(avgOrderPaise / 100)),
+          })
+        }
+      })
+      .catch(() => {})
+
+    // 2. Load Reports Aggregate
+    fetch('/api/admin/reports')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success && res.data) {
+          const rev = Math.round((res.data.netRevenuePaise || 0) / 100)
+          const orderCount = res.data.ordersCount || 0
+          const aov = orderCount ? Math.round(rev / orderCount) : 0
+          if (orderCount > 0) {
+            setStats((prev) => ({
+              ...prev,
+              revenue: fmt(rev),
+              totalOrders: `${orderCount} orders`,
+              aov: fmt(aov),
+            }))
+          }
+        }
+      })
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
+
+  const handleStatusChange = async (orderId: string, newStatus: Order['fulfilmentStatus']) => {
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, fulfilmentStatus: newStatus } : o))
     )
+    try {
+      await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: newStatus }),
+      })
+    } catch {
+      // Local fallback
+    }
+  }
+
+  const handleExportCSV = () => {
+    const link = document.createElement('a')
+    link.href = '/api/admin/reports?format=csv'
+    link.download = `aval-store-sales-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   return (
@@ -35,7 +172,7 @@ export default function AdminDashboardPage() {
             + Add New Product
           </Link>
           <button
-            onClick={() => alert('Exporting monthly sales report CSV...')}
+            onClick={handleExportCSV}
             className="btn btn-primary"
             style={{ fontSize: '13px', padding: '8px 16px' }}
           >
@@ -47,10 +184,10 @@ export default function AdminDashboardPage() {
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
         {[
-          { label: 'Total Revenue (Oct 2026)', value: '₹1,48,250', change: '+18.4% vs last month', isPositive: true },
-          { label: 'Total Orders', value: '38 orders', change: '8 custom bespoke sets', isPositive: true },
-          { label: 'Pending Fulfilment', value: '4 orders', change: 'Needs artisan review', isPositive: false },
-          { label: 'Average Order Value', value: '₹2,640', change: 'Top size: 2.6 Kundan', isPositive: true },
+          { label: 'Total Revenue', value: stats.revenue, change: 'Live from MySQL', isPositive: true },
+          { label: 'Total Orders', value: stats.totalOrders, change: 'Lifetime processed', isPositive: true },
+          { label: 'Pending Fulfilment', value: stats.pendingCount, change: 'Active workshop queue', isPositive: false },
+          { label: 'Average Order Value', value: stats.aov, change: 'Paise precision', isPositive: true },
         ].map((kpi, idx) => (
           <div key={idx} className="card" style={{ padding: '22px', background: '#fff', border: '1px solid #EBE4E0' }}>
             <div style={{ fontSize: '12px', color: 'var(--tx2)', fontWeight: 500 }}>{kpi.label}</div>

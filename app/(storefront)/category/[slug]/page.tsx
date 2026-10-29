@@ -2,12 +2,30 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { CATEGORIES, PRODUCTS } from '@/lib/data'
+import { CATEGORIES, PRODUCTS, Product } from '@/lib/data'
 import { useCart } from '@/context/CartContext'
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 
 function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN')
+}
+
+interface ApiProduct {
+  id: string
+  name: string
+  slug: string
+  regularPricePaise: number
+  salePricePaise: number
+  stock: number
+  customisable: boolean
+  isBestSeller?: boolean
+  isNew?: boolean
+  rating: number
+  reviewCount: number
+  images?: string[]
+  sizes?: string[]
+  details?: string[]
+  category?: { name: string; slug: string }
 }
 
 function CategoryContent() {
@@ -15,6 +33,7 @@ function CategoryContent() {
   const slug = params?.slug as string
   const { addItem } = useCart()
   const [toast, setToast] = useState<string | null>(null)
+  const [products, setProducts] = useState<Product[]>(PRODUCTS)
 
   const category = CATEGORIES.find((c) => c.slug === slug) || {
     name: slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Bridal Collection',
@@ -22,10 +41,43 @@ function CategoryContent() {
     description: 'Explore handcrafted bridal jewellery and accessories made with traditional precision in Kanyakumari.',
   }
 
-  const filteredProducts = PRODUCTS.filter(
+  useEffect(() => {
+    if (!slug) return
+    fetch(`/api/products?category=${slug}`)
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
+          setProducts(
+            res.data.data.map((p: ApiProduct) => ({
+              id: p.id,
+              name: p.name,
+              slug: p.slug,
+              category: p.category?.name ?? category.name,
+              categorySlug: p.category?.slug ?? slug,
+              regularPrice: p.regularPricePaise / 100,
+              salePrice: p.salePricePaise / 100,
+              discountPercent: Math.round(((p.regularPricePaise - p.salePricePaise) / p.regularPricePaise) * 100),
+              rating: p.rating || 5.0,
+              reviewCount: p.reviewCount || 0,
+              isBestSeller: p.isBestSeller,
+              isNew: p.isNew,
+              customisable: p.customisable,
+              stock: p.stock,
+              description: '',
+              details: Array.isArray(p.details) ? p.details : [],
+              images: Array.isArray(p.images) ? p.images : ['/images/hero_bangles.jpg'],
+              sizes: Array.isArray(p.sizes) ? p.sizes : ['2.4', '2.6'],
+            }))
+          )
+        }
+      })
+      .catch(() => {})
+  }, [slug, category.name])
+
+  const filteredProducts = products.filter(
     (p) => p.categorySlug === slug || slug === 'all'
   )
-  const displayProducts = filteredProducts.length > 0 ? filteredProducts : PRODUCTS
+  const displayProducts = filteredProducts.length > 0 ? filteredProducts : products
 
   const handleQuickAdd = (product: typeof PRODUCTS[0]) => {
     addItem(product, product.sizes[0] || '2.6', undefined, undefined, 1)

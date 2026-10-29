@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { CATEGORIES, PRODUCTS } from '@/lib/data'
+import { CATEGORIES, PRODUCTS, Product, Category } from '@/lib/data'
+import { prisma } from '@/lib/db'
 
 export const metadata: Metadata = {
   title: 'AVAL Store — Handcrafted Bridal Accessories',
@@ -18,8 +19,62 @@ function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN')
 }
 
-export default function HomePage() {
-  const bestSellers = PRODUCTS.slice(0, 4)
+export default async function HomePage() {
+  let bestSellers: Product[] = PRODUCTS.slice(0, 4)
+  let categories: Category[] = CATEGORIES
+
+  try {
+    const [dbProducts, dbCategories] = await Promise.all([
+      prisma.product.findMany({
+        where: { archived: false },
+        take: 4,
+        orderBy: [{ isBestSeller: 'desc' }, { createdAt: 'desc' }],
+        include: { category: true },
+      }),
+      prisma.category.findMany({
+        where: { archived: false },
+        take: 4,
+        orderBy: { sortOrder: 'asc' },
+        include: { _count: { select: { products: true } } },
+      }),
+    ])
+
+    if (dbProducts.length > 0) {
+      bestSellers = dbProducts.map((p) => ({
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        category: p.category.name,
+        categorySlug: p.category.slug,
+        regularPrice: p.regularPricePaise / 100,
+        salePrice: p.salePricePaise / 100,
+        discountPercent: Math.round(((p.regularPricePaise - p.salePricePaise) / p.regularPricePaise) * 100),
+        rating: p.rating,
+        reviewCount: p.reviewCount,
+        isBestSeller: p.isBestSeller,
+        isNew: p.isNew,
+        customisable: p.customisable,
+        stock: p.stock,
+        description: p.description,
+        details: Array.isArray(p.details) ? (p.details as string[]) : [],
+        images: Array.isArray(p.images) ? (p.images as string[]) : ['/images/hero_bangles.jpg'],
+        sizes: Array.isArray(p.sizes) ? (p.sizes as string[]) : ['2.4', '2.6'],
+      }))
+    }
+
+    if (dbCategories.length > 0) {
+      categories = dbCategories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        image: c.image || '/images/hero_bangles.jpg',
+        itemCount: c._count.products,
+        description: c.description,
+      }))
+    }
+  } catch {
+    // static fallback
+  }
 
   return (
     <div>
@@ -124,7 +179,7 @@ export default function HomePage() {
             <Link href="/shop" className="btn btn-ghost" style={{ fontSize: '14px' }}>View all →</Link>
           </div>
           <div className="grid grid-auto" style={{ gap: '20px' }}>
-            {CATEGORIES.slice(0, 4).map((cat) => (
+            {categories.slice(0, 4).map((cat) => (
               <Link key={cat.slug} href={`/category/${cat.slug}`} className="cat-tile" style={{ textDecoration: 'none', position: 'relative', overflow: 'hidden', height: '220px', borderRadius: 0, border: '1px solid var(--bd)' }}>
                 <img
                   src={cat.image}

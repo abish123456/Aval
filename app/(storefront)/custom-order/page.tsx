@@ -17,9 +17,46 @@ export default function CustomOrderPage() {
     notes: '',
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSubmitted(true)
+    setIsSubmitting(true)
+    setErrorMessage('')
+
+    try {
+      const description = [
+        `Accessory Type: ${formData.accessoryType}`,
+        formData.bangleSize ? `Size: ${formData.bangleSize}` : null,
+        formData.colorPreference ? `Color Preference: ${formData.colorPreference}` : null,
+        formData.customNames ? `Custom Names / Text: ${formData.customNames}` : null,
+        formData.notes ? `Notes: ${formData.notes}` : null,
+      ].filter(Boolean).join('\n')
+
+      const res = await fetch('/api/custom-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          description: description || 'Custom bridal request',
+          weddingDate: formData.eventDate,
+        }),
+      })
+
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setSubmitted(true)
+      } else {
+        setErrorMessage(data.error || 'Failed to submit request. Please try again.')
+      }
+    } catch {
+      setErrorMessage('Network error. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -243,17 +280,25 @@ export default function CustomOrderPage() {
                 />
               </label>
 
+              {errorMessage && (
+                <div style={{ padding: '12px', background: '#fee2e2', color: '#dc2626', borderRadius: '8px', fontSize: '13px' }}>
+                  {errorMessage}
+                </div>
+              )}
+
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className="btn btn-primary"
                 style={{
                   height: '50px',
                   fontSize: '15px',
                   fontWeight: 600,
                   marginTop: '8px',
+                  opacity: isSubmitting ? 0.7 : 1,
                 }}
               >
-                Submit Custom Design Request
+                {isSubmitting ? 'Submitting to Studio...' : 'Submit Custom Design Request'}
               </button>
 
               {/* Direct WhatsApp CTA */}

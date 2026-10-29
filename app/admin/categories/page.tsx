@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 interface CategoryItem {
@@ -14,64 +14,12 @@ interface CategoryItem {
   image: string
 }
 
-const INITIAL_CATEGORIES: CategoryItem[] = [
-  {
-    id: 'cat-1',
-    name: 'Bridal Bangles',
-    slug: 'bridal-bangles',
-    parent: null,
-    productCount: 42,
-    isVisible: true,
-    description: 'Custom silk thread, Kundan, and pearl sets tailored to your wedding lehenga & saree.',
-    image: '/images/hero_bangles.jpg',
-  },
-  {
-    id: 'cat-2',
-    name: 'Customised Bangles',
-    slug: 'customised',
-    parent: 'Bridal Bangles',
-    productCount: 18,
-    isVisible: true,
-    description: 'Embossed bride & groom names, wedding dates, and bridal hashtags in gold foil.',
-    image: '/images/name_bangles.jpg',
-  },
-  {
-    id: 'cat-3',
-    name: 'Hair Clips & Pins',
-    slug: 'hair-clips',
-    parent: null,
-    productCount: 31,
-    isVisible: true,
-    description: 'Jadabi floral hair extensions, poola jada clips, and bridal barrettes.',
-    image: '/images/pearl_hair_clip.jpg',
-  },
-  {
-    id: 'cat-4',
-    name: 'Bridesmaid Favours',
-    slug: 'bridesmaid',
-    parent: null,
-    productCount: 22,
-    isVisible: true,
-    description: 'Coordinated bangle sets, potli bags, and gift boxes for your bride tribe.',
-    image: '/images/kundan_set.jpg',
-  },
-  {
-    id: 'cat-5',
-    name: 'Gift Sets & Trousseau Trunks',
-    slug: 'gift-sets',
-    parent: null,
-    productCount: 14,
-    isVisible: true,
-    description: 'Curated bridal trousseau sets complete with presentation velvet trunks.',
-    image: '/images/trousseau_box.jpg',
-  },
-]
-
 export default function AdminCategoriesPage() {
-  const [categories, setCategories] = useState<CategoryItem[]>(INITIAL_CATEGORIES)
+  const [categories, setCategories] = useState<CategoryItem[]>([])
+  const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null)
   const [name, setName] = useState('')
-  const [parent, setParent] = useState('')
   const [description, setDescription] = useState('')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
@@ -80,49 +28,106 @@ export default function AdminCategoriesPage() {
     setTimeout(() => setToastMessage(null), 3000)
   }
 
-  const handleAddCategory = (e: React.FormEvent) => {
+  // Load live categories from MySQL
+  const loadCategories = () => {
+    setLoading(true)
+    fetch('/api/admin/categories')
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data)) {
+          setCategories(
+            res.data.map((c: { id: string; name: string; slug: string; description: string; image: string; productCount: number; archived: boolean }) => ({
+              id: c.id,
+              name: c.name,
+              slug: c.slug,
+              parent: null,
+              productCount: c.productCount ?? 0,
+              isVisible: !c.archived,
+              description: c.description ?? '',
+              image: c.image || '/images/hero_bangles.jpg',
+            }))
+          )
+        }
+      })
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadCategories()
+  }, [])
+
+  // CREATE
+  const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
 
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-    const newCat: CategoryItem = {
-      id: 'cat-' + Date.now(),
-      name: name.trim(),
-      slug,
-      parent: parent || null,
-      productCount: 0,
-      isVisible: true,
-      description,
-      image: '/images/hero_bangles.jpg',
+
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), slug, description }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setName('')
+        setDescription('')
+        setShowAddForm(false)
+        loadCategories()
+        showToast(`Category "${name}" created successfully!`)
+      } else {
+        alert(data.error || 'Failed to create category.')
+      }
+    } catch {
+      alert('Network error while creating category.')
     }
-
-    setCategories([...categories, newCat])
-    setName('')
-    setParent('')
-    setDescription('')
-    setShowAddForm(false)
-    showToast(`Category "${newCat.name}" added successfully!`)
   }
 
-  const moveCategory = (index: number, direction: -1 | 1) => {
-    const targetIndex = index + direction
-    if (targetIndex < 0 || targetIndex >= categories.length) return
-    const updated = [...categories]
-    const temp = updated[index]
-    updated[index] = updated[targetIndex]
-    updated[targetIndex] = temp
-    setCategories(updated)
+  // UPDATE
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingCategory) return
+
+    try {
+      const res = await fetch(`/api/admin/categories/${editingCategory.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingCategory.name,
+          slug: editingCategory.slug,
+          description: editingCategory.description,
+          archived: !editingCategory.isVisible,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setEditingCategory(null)
+        loadCategories()
+        showToast('Category updated successfully!')
+      } else {
+        alert(data.error || 'Failed to update category.')
+      }
+    } catch {
+      alert('Network error while updating category.')
+    }
   }
 
-  const toggleVisibility = (id: string) => {
-    setCategories(
-      categories.map((c) => (c.id === id ? { ...c, isVisible: !c.isVisible } : c))
-    )
-  }
-
-  const archiveCategory = (id: string) => {
-    setCategories(categories.filter((c) => c.id !== id))
-    showToast('Category archived.')
+  // DELETE
+  const handleDeleteCategory = async (id: string, catName: string) => {
+    if (!confirm(`Are you sure you want to delete category "${catName}"?`)) return
+    try {
+      const res = await fetch(`/api/admin/categories/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setCategories((prev) => prev.filter((c) => c.id !== id))
+        showToast('Category deleted successfully.')
+      } else {
+        alert('Could not delete category (it may still have linked products).')
+      }
+    } catch {
+      alert('Network error while deleting category.')
+    }
   }
 
   return (
@@ -150,24 +155,28 @@ export default function AdminCategoriesPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '32px', color: 'var(--dk)', margin: 0 }}>
-            Collection Categories
+          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '28px', color: 'var(--dk)', margin: 0, fontWeight: 600 }}>
+            Collection Categories (Full CRUD)
           </h1>
-          <p style={{ color: 'var(--tx2)', fontSize: '14px', marginTop: '4px' }}>
-            Organize bridal jewellery taxonomy, storefront navigation hierarchy, and catalog filters.
+          <p style={{ color: 'var(--tx2)', fontSize: '13px', marginTop: '4px' }}>
+            Create, Read, Update, and Delete bridal categories and storefront navigation in real-time.
           </p>
         </div>
 
         <button
           onClick={() => setShowAddForm(!showAddForm)}
           className="btn btn-primary"
-          style={{ fontSize: '13px', padding: '10px 20px' }}
+          style={{ fontSize: '13px', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '8px' }}
         >
-          {showAddForm ? '✕ Close Form' : '+ Add New Category'}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          {showAddForm ? 'Close Form' : 'Add New Category'}
         </button>
       </div>
 
-      {/* Add New Category Card */}
+      {/* CREATE FORM */}
       {showAddForm && (
         <div className="card" style={{ padding: '24px', background: '#FFFDFB', border: '1.5px solid var(--pr)' }}>
           <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', marginBottom: '16px' }}>
@@ -175,37 +184,17 @@ export default function AdminCategoriesPage() {
           </h2>
 
           <form onSubmit={handleAddCategory} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-              <label className="input-label">
-                <span>Category Name</span>
-                <input
-                  type="text"
-                  className="input"
-                  required
-                  placeholder="e.g. Bridal Matha Patti"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </label>
-
-              <label className="input-label">
-                <span>Parent Category (Optional)</span>
-                <select
-                  className="input"
-                  value={parent}
-                  onChange={(e) => setParent(e.target.value)}
-                >
-                  <option value="">None (Top-Level Category)</option>
-                  {categories
-                    .filter((c) => !c.parent)
-                    .map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            </div>
+            <label className="input-label">
+              <span>Category Name *</span>
+              <input
+                type="text"
+                className="input"
+                required
+                placeholder="e.g. Bridal Matha Patti"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
 
             <label className="input-label">
               <span>Category Description</span>
@@ -220,7 +209,7 @@ export default function AdminCategoriesPage() {
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
               <button type="submit" className="btn btn-primary btn-sm">
-                Save Category
+                Save &amp; Create Category
               </button>
               <button
                 type="button"
@@ -236,100 +225,168 @@ export default function AdminCategoriesPage() {
 
       {/* Categories Table */}
       <div className="card" style={{ padding: '24px', background: '#fff' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid var(--bd)', color: 'var(--tx2)' }}>
-                <th style={{ padding: '12px' }}>Order</th>
-                <th style={{ padding: '12px' }}>Category Name &amp; URL</th>
-                <th style={{ padding: '12px' }}>Parent Category</th>
-                <th style={{ padding: '12px' }}>Products</th>
-                <th style={{ padding: '12px' }}>Visibility</th>
-                <th style={{ padding: '12px', textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categories.map((cat, idx) => (
-                <tr key={cat.id} style={{ borderBottom: '1px solid #F0E8E6' }}>
-                  <td style={{ padding: '14px 12px' }}>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button
-                        onClick={() => moveCategory(idx, -1)}
-                        disabled={idx === 0}
-                        style={{
-                          background: 'none',
-                          border: '1px solid var(--bd)',
-                          padding: '2px 8px',
-                          cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                          opacity: idx === 0 ? 0.3 : 1,
-                        }}
-                        title="Move Up"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        onClick={() => moveCategory(idx, 1)}
-                        disabled={idx === categories.length - 1}
-                        style={{
-                          background: 'none',
-                          border: '1px solid var(--bd)',
-                          padding: '2px 8px',
-                          cursor: idx === categories.length - 1 ? 'not-allowed' : 'pointer',
-                          opacity: idx === categories.length - 1 ? 0.3 : 1,
-                        }}
-                        title="Move Down"
-                      >
-                        ▼
-                      </button>
-                    </div>
-                  </td>
-
-                  <td style={{ padding: '14px 12px' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--dk)', fontSize: '14px' }}>{cat.name}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--tx2)', marginTop: '2px' }}>
-                      <Link href={`/category/${cat.slug}`} target="_blank" style={{ color: 'var(--pr)', textDecoration: 'none' }}>
-                        /category/{cat.slug} ↗
-                      </Link>
-                    </div>
-                  </td>
-
-                  <td style={{ padding: '14px 12px', color: cat.parent ? 'var(--dk)' : 'var(--tx2)' }}>
-                    {cat.parent || '—'}
-                  </td>
-
-                  <td style={{ padding: '14px 12px', fontWeight: 600 }}>{cat.productCount} pieces</td>
-
-                  <td style={{ padding: '14px 12px' }}>
-                    <span className={`tag ${cat.isVisible ? 'tag-ok' : 'tag-warning'}`}>
-                      {cat.isVisible ? 'Visible' : 'Hidden'}
-                    </span>
-                  </td>
-
-                  <td style={{ padding: '14px 12px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '8px' }}>
-                      <button
-                        onClick={() => toggleVisibility(cat.id)}
-                        className="btn btn-sm btn-outline"
-                        style={{ fontSize: '12px', padding: '4px 10px', minHeight: '30px' }}
-                      >
-                        {cat.isVisible ? 'Hide' : 'Show'}
-                      </button>
-                      <button
-                        onClick={() => archiveCategory(cat.id)}
-                        className="btn btn-sm btn-ghost"
-                        style={{ fontSize: '12px', padding: '4px 10px', minHeight: '30px', color: 'var(--er)' }}
-                      >
-                        Archive
-                      </button>
-                    </div>
-                  </td>
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--tx2)' }}>Loading categories...</div>
+        ) : categories.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--tx2)' }}>No categories found in database.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--bd)', color: 'var(--tx2)' }}>
+                  <th style={{ padding: '12px' }}>Category Name &amp; URL</th>
+                  <th style={{ padding: '12px' }}>Products</th>
+                  <th style={{ padding: '12px' }}>Visibility</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {categories.map((cat) => (
+                  <tr key={cat.id} style={{ borderBottom: '1px solid #F0E8E6' }}>
+                    <td style={{ padding: '14px 12px' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--dk)', fontSize: '14px' }}>{cat.name}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--tx2)', marginTop: '2px' }}>
+                        <Link href={`/category/${cat.slug}`} target="_blank" style={{ color: 'var(--pr)', textDecoration: 'none' }}>
+                          /category/{cat.slug} ↗
+                        </Link>
+                      </div>
+                    </td>
+
+                    <td style={{ padding: '14px 12px', fontWeight: 600 }}>{cat.productCount} pieces</td>
+
+                    <td style={{ padding: '14px 12px' }}>
+                      <span className={`tag ${cat.isVisible ? 'tag-ok' : 'tag-warning'}`}>
+                        {cat.isVisible ? 'Visible' : 'Hidden'}
+                      </span>
+                    </td>
+
+                    <td style={{ padding: '14px 12px', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                        <button
+                          onClick={() => setEditingCategory({ ...cat })}
+                          className="btn btn-sm btn-outline"
+                          style={{ fontSize: '12px', padding: '4px 12px', minHeight: '30px' }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                          style={{ background: 'none', border: 'none', color: '#b91c1c', cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {/* UPDATE / EDIT CATEGORY MODAL */}
+      {editingCategory && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            padding: '20px',
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              width: '100%',
+              maxWidth: '500px',
+              background: '#fff',
+              padding: '32px',
+              borderRadius: '8px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', color: 'var(--dk)', margin: 0 }}>
+                  Edit Category
+                </h2>
+                <div style={{ fontSize: '12px', color: 'var(--tx2)', marginTop: '2px', fontFamily: 'monospace' }}>
+                  ID: {editingCategory.id}
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingCategory(null)}
+                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateCategory} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <label className="input-label" style={{ fontSize: '13px' }}>
+                Category Name *
+                <input
+                  type="text"
+                  required
+                  className="input"
+                  value={editingCategory.name}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                />
+              </label>
+
+              <label className="input-label" style={{ fontSize: '13px' }}>
+                URL Slug *
+                <input
+                  type="text"
+                  required
+                  className="input"
+                  value={editingCategory.slug}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, slug: e.target.value })}
+                />
+              </label>
+
+              <label className="input-label" style={{ fontSize: '13px' }}>
+                Description
+                <textarea
+                  className="input"
+                  rows={2}
+                  value={editingCategory.description}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
+                />
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={editingCategory.isVisible}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, isVisible: e.target.checked })}
+                />
+                Visible in Storefront
+              </label>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1, padding: '12px 0' }}>
+                  Update Category
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingCategory(null)}
+                  className="btn btn-secondary"
+                  style={{ padding: '12px 20px' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-

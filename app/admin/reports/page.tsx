@@ -41,31 +41,13 @@ function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN')
 }
 
-function downloadCSV() {
-  const rows = [
-    ['Metric', 'Value'],
-    ['Gross Sales', '1,84,500'],
-    ['Discounts', '-21,300'],
-    ['Refunds', '-4,200'],
-    ['Shipping Collected', '6,800'],
-    ['GST', '0'],
-    ['Net Revenue', '1,59,000'],
-    [],
-    ['Week', 'Sales (₹)'],
-    ...WEEK_DATA.map((w) => [w.label, (w.value * SCALE).toString()]),
-    [],
-    ['Top Products', 'Units Sold', 'Revenue (₹)'],
-    ...TOP_PRODUCTS.map((p) => [p.name, p.sold.toString(), p.revenue.toString()]),
-  ]
-
-  const csv = rows.map((r) => r.join(',')).join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'aval-report.csv'
-  a.click()
-  URL.revokeObjectURL(url)
+function downloadCSV(range: string) {
+  const link = document.createElement('a')
+  link.href = `/api/admin/reports?format=csv&range=${range}`
+  link.setAttribute('download', 'aval-report.csv')
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 const DATE_RANGE_LABELS: Record<DateRange, string> = {
@@ -110,7 +92,7 @@ export default function AdminReportsPage() {
             <option value="last30">Last 30 days</option>
             <option value="thisYear">This year</option>
           </select>
-          <button className="btn btn-outline btn-sm" onClick={downloadCSV}>
+          <button className="btn btn-outline btn-sm" onClick={() => downloadCSV(dateRange)}>
             ⬇ Export CSV
           </button>
         </div>

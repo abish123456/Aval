@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Review {
-  id: number
+  id: string | number
   product: string
   customer: string
   rating: number
@@ -85,31 +85,97 @@ export default function AdminReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS)
   const [filter, setFilter] = useState<'all' | 'visible' | 'hidden' | 'unverified'>('all')
   const [toast, setToast] = useState('')
-  const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>(() =>
+  const [replyDrafts, setReplyDrafts] = useState<Record<string | number, string>>(() =>
     Object.fromEntries(INITIAL_REVIEWS.map((r) => [r.id, r.reply]))
   )
+
+  useEffect(() => {
+    fetch('/api/admin/reviews')
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const loaded = res.data.map((r: {
+            id: string
+            rating: number
+            body: string
+            guestName?: string
+            verifiedPurchase: boolean
+            visible: boolean
+            artisanReply?: string
+            createdAt: string
+            product?: { name: string }
+            user?: { name: string }
+          }) => ({
+            id: r.id,
+            product: r.product?.name ?? 'Bridal Accessory',
+            customer: r.guestName ?? r.user?.name ?? 'Customer',
+            rating: r.rating,
+            text: r.body,
+            verifiedPurchase: r.verifiedPurchase,
+            visible: r.visible,
+            reply: r.artisanReply ?? '',
+            date: new Date(r.createdAt).toISOString().split('T')[0],
+          }))
+          setReviews(loaded)
+          setReplyDrafts(Object.fromEntries(loaded.map((l: Review) => [l.id, l.reply])))
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(''), 3000)
   }
 
-  function toggleVisibility(id: number) {
-    setReviews((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, visible: !r.visible } : r))
-    )
+  async function toggleVisibility(id: string | number) {
     const rev = reviews.find((r) => r.id === id)
-    showToast(rev?.visible ? '🚫 Review hidden from storefront.' : '✅ Review now visible on storefront.')
+    const nextVis = !rev?.visible
+    setReviews((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, visible: nextVis } : r))
+    )
+
+    if (typeof id === 'string') {
+      try {
+        await fetch('/api/admin/reviews', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, visible: nextVis }),
+        })
+      } catch {
+        // ignore
+      }
+    }
+    showToast(!nextVis ? '🚫 Review hidden from storefront.' : '✅ Review now visible on storefront.')
   }
 
-  function saveReply(id: number) {
+  async function saveReply(id: string | number) {
     const reply = replyDrafts[id] ?? ''
     setReviews((prev) => prev.map((r) => (r.id === id ? { ...r, reply } : r)))
+
+    if (typeof id === 'string') {
+      try {
+        await fetch('/api/admin/reviews', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, artisanReply: reply }),
+        })
+      } catch {
+        // ignore
+      }
+    }
     showToast('💬 Reply saved and published.')
   }
 
-  function deleteReview(id: number) {
+  async function deleteReview(id: string | number) {
     setReviews((prev) => prev.filter((r) => r.id !== id))
+    if (typeof id === 'string') {
+      try {
+        await fetch(`/api/admin/reviews?id=${id}`, { method: 'DELETE' })
+      } catch {
+        // ignore
+      }
+    }
     showToast('🗑️ Review deleted.')
   }
 

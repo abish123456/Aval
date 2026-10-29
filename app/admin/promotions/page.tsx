@@ -158,11 +158,33 @@ export default function AdminPromotionsPage() {
     return promotions.filter((p) => types.includes(p.type) && p.status !== 'expired')
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.name.trim()) {
       showToast('Please enter a promotion name.')
       return
     }
+
+    try {
+      await fetch('/api/admin/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: form.type === 'coupon' ? 'COUPON' : 'PROMOTION',
+          name: form.name,
+          type: form.type === 'combo' ? 'COMBO' : form.type === 'flash' ? 'FLASH' : 'COUPON',
+          discountType: form.discountType === 'percent' ? 'PERCENT' : 'FIXED',
+          valueBp: form.discountType === 'percent' ? form.discountValue * 100 : form.discountValue * 100,
+          code: form.code || undefined,
+          usageLimit: form.usageLimit || undefined,
+          startsAt: form.startDate || undefined,
+          expiresAt: form.endDate || undefined,
+          combinesWithCoupon: form.combinesCoupons,
+        }),
+      })
+    } catch {
+      // ignore
+    }
+
     const newPromo: Promotion = {
       id: Date.now(),
       name: form.name,

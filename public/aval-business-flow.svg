@@ -1,0 +1,195 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1020" width="1400" height="1020" style="background:#0c0710; font-family:'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;">
+  <defs>
+    <!-- Background Gradients -->
+    <radialGradient id="bgGlow" cx="50%" cy="10%" r="80%">
+      <stop offset="0%" stop-color="#3b112c" stop-opacity="0.7"/>
+      <stop offset="50%" stop-color="#180a1d" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0c0710" stop-opacity="1"/>
+    </radialGradient>
+    
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#fed7aa"/>
+      <stop offset="100%" stop-color="#f43f5e"/>
+    </linearGradient>
+
+    <linearGradient id="pinkCard" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2a1226"/>
+      <stop offset="100%" stop-color="#190a1a"/>
+    </linearGradient>
+
+    <linearGradient id="waGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#062d24" stop-opacity="0.6"/>
+    </linearGradient>
+
+    <linearGradient id="webGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#831843" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#4c0519" stop-opacity="0.6"/>
+    </linearGradient>
+
+    <linearGradient id="hubGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2a1b06" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#1f112e" stop-opacity="0.7"/>
+    </linearGradient>
+
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1400" height="1020" fill="url(#bgGlow)"/>
+
+  <!-- Outer Border Container -->
+  <rect x="30" y="30" width="1340" height="960" rx="24" fill="none" stroke="#f43f5e" stroke-opacity="0.25" stroke-width="1.5"/>
+
+  <!-- Top Badge -->
+  <g transform="translate(540, 60)">
+    <rect x="0" y="0" width="320" height="32" rx="16" fill="#e11d48" fill-opacity="0.15" stroke="#f43f5e" stroke-width="1"/>
+    <text x="160" y="21" font-size="12" font-weight="700" fill="#fda4af" letter-spacing="1.5" text-anchor="middle">🌸 AVAL STORE • BRIDAL WORKFLOW</text>
+  </g>
+
+  <!-- Title & Subtitle -->
+  <text x="700" y="130" font-size="34" font-weight="800" fill="url(#headerGrad)" text-anchor="middle">Realtime Bridal Bangles Workflow</text>
+  <text x="700" y="162" font-size="15" fill="#cbd5e1" text-anchor="middle">South Indian Brides Psychology: Personal Reassurance on WhatsApp + Automated Store &amp; Admin Panel</text>
+
+  <!-- STAGE 1: Discovery & Catalog Browsing -->
+  <g transform="translate(60, 200)" filter="url(#shadow)">
+    <rect width="1280" height="135" rx="16" fill="url(#pinkCard)" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1"/>
+    
+    <!-- Stage 1 Pill -->
+    <rect x="25" y="20" width="36" height="36" rx="10" fill="#f43f5e"/>
+    <text x="43" y="44" font-size="16" font-weight="800" fill="#ffffff" text-anchor="middle">1</text>
+    <text x="75" y="44" font-size="19" font-weight="700" fill="#ffffff">Step 1: Bride Browsing Online Catalog (Zero Friction • No Mandatory Login)</text>
+    
+    <rect x="1100" y="22" width="150" height="28" rx="6" fill="#f43f5e" fill-opacity="0.15"/>
+    <text x="1175" y="41" font-size="11" font-weight="700" fill="#fda4af" text-anchor="middle">NO LOGIN BARRIER</text>
+
+    <!-- 3 Subcards in Step 1 -->
+    <g transform="translate(25, 68)">
+      <rect width="395" height="50" rx="8" fill="#000000" fill-opacity="0.3"/>
+      <text x="15" y="22" font-size="13" font-weight="700" fill="#fda4af">📱 Social Discovery</text>
+      <text x="15" y="40" font-size="12" fill="#94a3b8">Brides land from Instagram Reels, Ads, or Google directly.</text>
+    </g>
+
+    <g transform="translate(440, 68)">
+      <rect width="395" height="50" rx="8" fill="#000000" fill-opacity="0.3"/>
+      <text x="15" y="22" font-size="13" font-weight="700" fill="#fda4af">💎 Transparent Catalog</text>
+      <text x="15" y="40" font-size="12" fill="#94a3b8">Kundan designs, exact ₹ price, bangle size chart (2.4, 2.6, 2.8).</text>
+    </g>
+
+    <g transform="translate(855, 68)">
+      <rect width="395" height="50" rx="8" fill="#000000" fill-opacity="0.3"/>
+      <text x="15" y="22" font-size="13" font-weight="700" fill="#fda4af">🚀 Zero Drop-off Rate</text>
+      <text x="15" y="40" font-size="12" fill="#94a3b8">Browses freely without annoying "Sign Up / Password" forms.</text>
+    </g>
+  </g>
+
+  <!-- Connective Arrows Downward -->
+  <path d="M 400 340 L 400 375" stroke="#10b981" stroke-width="2.5" stroke-dasharray="5 5" fill="none"/>
+  <polygon points="400,380 395,372 405,372" fill="#10b981"/>
+
+  <path d="M 1000 340 L 1000 375" stroke="#f43f5e" stroke-width="2.5" stroke-dasharray="5 5" fill="none"/>
+  <polygon points="1000,380 995,372 1005,372" fill="#f43f5e"/>
+
+  <!-- STAGE 2: DUAL ORDERING PATHWAYS -->
+  <!-- Left: WhatsApp Bespoke Customisation -->
+  <g transform="translate(60, 385)" filter="url(#shadow)">
+    <rect width="620" height="340" rx="18" fill="url(#waGrad)" stroke="#10b981" stroke-width="1.8"/>
+    
+    <rect x="25" y="22" width="230" height="26" rx="6" fill="#10b981"/>
+    <text x="140" y="39" font-size="11" font-weight="800" fill="#022c22" text-anchor="middle">⭐ 85% OF BRIDES PREFER THIS</text>
+
+    <text x="25" y="78" font-size="22" font-weight="800" fill="#ffffff">💬 Path A: "Customise on WhatsApp"</text>
+    <text x="25" y="100" font-size="13" fill="#6ee7b7">For brides matching Muhurtham silk sarees &amp; custom sizing.</text>
+
+    <!-- Substeps -->
+    <g transform="translate(25, 120)">
+      <rect width="570" height="54" rx="10" fill="#000000" fill-opacity="0.35"/>
+      <text x="15" y="24" font-size="14" font-weight="700" fill="#ffffff">1. Click "🌸 Customise on WhatsApp" Button</text>
+      <text x="15" y="43" font-size="12" fill="#cbd5e1">WhatsApp automatically opens with Product Title &amp; Selected Size pre-typed.</text>
+    </g>
+
+    <g transform="translate(25, 185)">
+      <rect width="570" height="54" rx="10" fill="#000000" fill-opacity="0.35"/>
+      <text x="15" y="24" font-size="14" font-weight="700" fill="#ffffff">2. Saree Photo &amp; Muhurtham Date Discussion</text>
+      <text x="15" y="43" font-size="12" fill="#cbd5e1">Bride shares wedding saree photo. Artisan advises matching Kundan stones.</text>
+    </g>
+
+    <g transform="translate(25, 250)">
+      <rect width="570" height="54" rx="10" fill="#000000" fill-opacity="0.35"/>
+      <text x="15" y="24" font-size="14" font-weight="700" fill="#ffffff">3. Advance Payment via GPay / UPI</text>
+      <text x="15" y="43" font-size="12" fill="#cbd5e1">High trust personal interaction. Advance paid, order confirmed instantly!</text>
+    </g>
+  </g>
+
+  <!-- Right: Fast Web Checkout -->
+  <g transform="translate(720, 385)" filter="url(#shadow)">
+    <rect width="620" height="340" rx="18" fill="url(#webGrad)" stroke="#f43f5e" stroke-width="1.8"/>
+    
+    <rect x="25" y="22" width="180" height="26" rx="6" fill="#f43f5e"/>
+    <text x="115" y="39" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">⚡ INSTANT WEB ORDER</text>
+
+    <text x="25" y="78" font-size="22" font-weight="800" fill="#ffffff">🛍️ Path B: "Buy Online / Add to Bag"</text>
+    <text x="25" y="100" font-size="13" fill="#fda4af">For ready-to-ship bangles, fast gifts, or self-serve buyers.</text>
+
+    <!-- Substeps -->
+    <g transform="translate(25, 120)">
+      <rect width="570" height="54" rx="10" fill="#000000" fill-opacity="0.35"/>
+      <text x="15" y="24" font-size="14" font-weight="700" fill="#ffffff">1. Choose Size (2.4, 2.6, 2.8) &amp; Add to Bag</text>
+      <text x="15" y="43" font-size="12" fill="#cbd5e1">Instant pricing in Paise/₹ with automatic free shipping over ₹500.</text>
+    </g>
+
+    <g transform="translate(25, 185)">
+      <rect width="570" height="54" rx="10" fill="#000000" fill-opacity="0.35"/>
+      <text x="15" y="24" font-size="14" font-weight="700" fill="#ffffff">2. Express 1-Minute Guest Checkout</text>
+      <text x="15" y="43" font-size="12" fill="#cbd5e1">Enter delivery address &amp; phone number directly. No password required!</text>
+    </g>
+
+    <g transform="translate(25, 250)">
+      <rect width="570" height="54" rx="10" fill="#000000" fill-opacity="0.35"/>
+      <text x="15" y="24" font-size="14" font-weight="700" fill="#ffffff">3. Instant Online UPI / Card Payment</text>
+      <text x="15" y="43" font-size="12" fill="#cbd5e1">Official order #AVAL generated and synced automatically to database.</text>
+    </g>
+  </g>
+
+  <!-- Connective Convergence Arrows Downward -->
+  <path d="M 400 730 L 400 755 L 680 755 L 680 770" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
+  <path d="M 1000 730 L 1000 755 L 720 755 L 720 770" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4 4" fill="none"/>
+  <polygon points="700,776 693,768 707,768" fill="#f59e0b"/>
+
+  <!-- STAGE 3: Unified Admin & Workshop Hub -->
+  <g transform="translate(60, 780)" filter="url(#shadow)">
+    <rect width="1280" height="150" rx="18" fill="url(#hubGrad)" stroke="#f59e0b" stroke-width="1.5"/>
+
+    <rect x="25" y="18" width="36" height="36" rx="10" fill="#f59e0b"/>
+    <text x="43" y="42" font-size="16" font-weight="800" fill="#000000" text-anchor="middle">2</text>
+    <text x="75" y="42" font-size="19" font-weight="700" fill="#fde047">Centralized AVAL Admin &amp; Workshop Hub (Next.js 16 + MySQL Database)</text>
+
+    <!-- 3 Hub Boxes -->
+    <g transform="translate(25, 66)">
+      <rect width="395" height="66" rx="10" fill="#000000" fill-opacity="0.4"/>
+      <text x="15" y="24" font-size="14" font-weight="700" fill="#fed7aa">📋 Unified Orders Management</text>
+      <text x="15" y="44" font-size="12" fill="#cbd5e1">Both WhatsApp custom orders &amp; web checkouts in one live dashboard.</text>
+    </g>
+
+    <g transform="translate(440, 66)">
+      <rect width="395" height="66" rx="10" fill="#000000" fill-opacity="0.4"/>
+      <text x="15" y="24" font-size="14" font-weight="700" fill="#fed7aa">🎨 Kanyakumari Workshop Production</text>
+      <text x="15" y="44" font-size="12" fill="#cbd5e1">Artisans craft Kundan bangles to exact saree shade &amp; wrist size.</text>
+    </g>
+
+    <g transform="translate(855, 66)">
+      <rect width="395" height="66" rx="10" fill="#000000" fill-opacity="0.4"/>
+      <text x="15" y="24" font-size="14" font-weight="700" fill="#fed7aa">📦 Automated Dispatch &amp; Tracking</text>
+      <text x="15" y="44" font-size="12" fill="#cbd5e1">Add courier AWB. Bride automatically gets live tracking link via WhatsApp!</text>
+    </g>
+  </g>
+
+  <!-- Bottom Brand Signature -->
+  <text x="700" y="968" font-size="13" font-weight="600" fill="#94a3b8" text-anchor="middle">
+    ✨ AVAL Store • Handcrafted Bridal Accessories &amp; Bespoke Kundan Bangles • Kanyakumari, Tamil Nadu
+  </text>
+</svg>
+

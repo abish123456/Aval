@@ -116,9 +116,25 @@ export default function AdminCustomOrdersPage() {
     setArtisanNote(req.artisanNote || '')
   }
 
-  const handleSendQuote = (e: React.FormEvent) => {
+  const handleSendQuote = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedReq) return
+
+    const totalQuotePaise = (quotePrice + quoteAdditional) * 100
+
+    try {
+      await fetch(`/api/admin/custom-orders/${selectedReq.id}/quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quotePricePaise: totalQuotePaise,
+          quoteNote: artisanNote || 'Handcrafted bespoke quote prepared by AVAL artisans.',
+          validDays: productionDays || 7,
+        }),
+      })
+    } catch {
+      // ignore
+    }
 
     setRequests((prev) =>
       prev.map((r) =>
@@ -150,7 +166,7 @@ export default function AdminCustomOrdersPage() {
         : null
     )
 
-    showToast(`Quote sent to ${selectedReq.customerName} for ${selectedReq.reference}!`)
+    showToast(`Bespoke quote sent to ${selectedReq.customerName} on WhatsApp & Email!`)
   }
 
   const handleStatusUpdate = (newStatus: CustomRequest['status']) => {

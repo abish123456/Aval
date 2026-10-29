@@ -10,7 +10,7 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     if (!email || !password) {
@@ -18,18 +18,48 @@ export default function AdminLoginPage() {
       return
     }
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Invalid credentials')
+        setLoading(false)
+        return
+      }
       router.push('/admin')
-    }, 800)
+      router.refresh()
+    } catch {
+      setError('Connection error. Please try again.')
+      setLoading(false)
+    }
   }
 
-  function handleDemoLogin() {
+  async function handleDemoLogin() {
+    setEmail('abishek@avalstore.in')
+    setPassword('aval2026')
     setLoading(true)
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'abishek@avalstore.in', password: 'aval2026' }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        router.push('/admin')
+        router.refresh()
+      } else {
+        setError('Demo sign-in failed. Please check MySQL connection.')
+        setLoading(false)
+      }
+    } catch {
+      setError('Connection error.')
       setLoading(false)
-      router.push('/admin')
-    }, 600)
+    }
   }
 
   return (

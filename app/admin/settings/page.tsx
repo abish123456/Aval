@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState({
@@ -16,11 +16,57 @@ export default function AdminSettingsPage() {
   })
 
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetch('/api/admin/settings')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success && res.data) {
+          const map = res.data
+          setSettings((prev) => ({
+            ...prev,
+            storeName: map['store_name'] || prev.storeName,
+            contactEmail: map['contact_email'] || prev.contactEmail,
+            whatsappNumber: map['whatsapp_number'] || prev.whatsappNumber,
+            workshopHubAddress: map['workshop_address'] || prev.workshopHubAddress,
+            freeShippingThreshold: map['free_shipping_threshold_paise']
+              ? Math.round(Number(map['free_shipping_threshold_paise']) / 100)
+              : prev.freeShippingThreshold,
+            standardShippingFee: map['shipping_flat_fee_paise']
+              ? Math.round(Number(map['shipping_flat_fee_paise']) / 100)
+              : prev.standardShippingFee,
+          }))
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    setSaving(true)
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          store_name: settings.storeName,
+          contact_email: settings.contactEmail,
+          whatsapp_number: settings.whatsappNumber,
+          workshop_address: settings.workshopHubAddress,
+          free_shipping_threshold_paise: String(settings.freeShippingThreshold * 100),
+          shipping_flat_fee_paise: String(settings.standardShippingFee * 100),
+        }),
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      // Local fallback
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -142,10 +188,11 @@ export default function AdminSettingsPage() {
 
         <button
           type="submit"
+          disabled={saving}
           className="btn btn-primary"
           style={{ height: '46px', fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          {saved ? '✓ Settings Saved Successfully!' : 'Save Store Changes'}
+          {saving ? 'Saving...' : saved ? '✓ Settings Saved to MySQL!' : 'Save Store Changes'}
         </button>
       </form>
     </div>

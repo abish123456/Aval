@@ -2,28 +2,67 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { INITIAL_ORDERS, Order } from '@/lib/data'
 
 function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN')
 }
 
-export default function TrackOrderPage() {
-  const [query, setQuery] = useState('AVL-9842')
-  const [foundOrder, setFoundOrder] = useState<Order | null>(INITIAL_ORDERS[0])
-  const [searched, setSearched] = useState(true)
+interface TrackedOrder {
+  orderNumber: string
+  fulfilmentStatus: string
+  paymentStatus: string
+  createdAt: string
+  carrier?: string
+  trackingNumber?: string
+  customerName?: string
+  items: Array<{
+    id: string
+    name: string
+    image: string
+    size: string
+    qty: number
+    customName?: string
+    price: number
+  }>
+}
 
-  const handleSearch = (e: React.FormEvent) => {
+export default function TrackOrderPage() {
+  const [query, setQuery] = useState('')
+  const [foundOrder, setFoundOrder] = useState<TrackedOrder | null>(null)
+  const [searched, setSearched] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!query.trim()) return
+    setIsLoading(true)
+    setError('')
     setSearched(true)
-    const q = query.trim().toUpperCase()
-    const match = INITIAL_ORDERS.find(
-      (o) =>
-        o.orderNumber.toUpperCase() === q ||
-        o.phone.includes(q) ||
-        o.email.toLowerCase() === query.trim().toLowerCase()
-    )
-    setFoundOrder(match || null)
+
+    try {
+      const res = await fetch('/api/track-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim() }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        if (data.redirect) {
+          window.location.href = data.redirect
+          return
+        }
+        setFoundOrder(data.data)
+      } else {
+        setFoundOrder(null)
+        setError(data.error || 'No order found with those details.')
+      }
+    } catch {
+      setFoundOrder(null)
+      setError('Connection error. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -54,10 +93,16 @@ export default function TrackOrderPage() {
             onChange={(e) => setQuery(e.target.value)}
             style={{ fontSize: '15px' }}
           />
-          <button type="submit" className="btn btn-primary" style={{ padding: '0 28px', whiteSpace: 'nowrap' }}>
-            Track Order
+          <button type="submit" disabled={isLoading} className="btn btn-primary" style={{ padding: '0 28px', whiteSpace: 'nowrap', opacity: isLoading ? 0.7 : 1 }}>
+            {isLoading ? 'Searching...' : 'Track Order'}
           </button>
         </form>
+
+        {error && (
+          <div style={{ padding: '14px', background: '#fee2e2', color: '#dc2626', borderRadius: '8px', fontSize: '13px', marginBottom: '24px', textAlign: 'center' }}>
+            {error}
+          </div>
+        )}
 
         {searched && foundOrder && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -124,16 +169,16 @@ export default function TrackOrderPage() {
                 {foundOrder.items.map((it) => (
                   <div key={it.id} style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
                     <img
-                      src={it.product.images[0]}
-                      alt={it.product.name}
+                      src={it.image}
+                      alt={it.name}
                       style={{ width: '56px', height: '56px', borderRadius: '4px', objectFit: 'cover' }}
                     />
                     <div style={{ flex: 1, fontSize: '13px' }}>
-                      <div style={{ fontWeight: 600, color: 'var(--dk)' }}>{it.product.name}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--dk)' }}>{it.name}</div>
                       <div style={{ color: 'var(--tx2)' }}>Size: {it.size} • Qty: {it.qty}</div>
                       {it.customName && (
                         <div style={{ color: 'var(--pr)', fontSize: '12px', fontWeight: 500 }}>
-                          ✍️ &ldquo;{it.customName}&rdquo; {it.weddingDate && `(${it.weddingDate})`}
+                          ✍️ &ldquo;{it.customName}&rdquo;
                         </div>
                       )}
                     </div>
@@ -145,16 +190,15 @@ export default function TrackOrderPage() {
               </div>
             </div>
 
-            {/* Shipping Info */}
+            {/* Order Note */}
             <div className="card" style={{ padding: '24px', background: '#fff', fontSize: '13px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--dk)', marginBottom: '12px' }}>
-                Shipping Destination
+                Customer &amp; Dispatch Information
               </h3>
               <p style={{ color: 'var(--tx2)', lineHeight: 1.6 }}>
-                <strong>{foundOrder.customerName}</strong><br />
-                {foundOrder.shippingAddress.street}<br />
-                {foundOrder.shippingAddress.city}, {foundOrder.shippingAddress.state} - {foundOrder.shippingAddress.pincode}<br />
-                Phone: {foundOrder.phone}
+                Ordered by: <strong>{foundOrder.customerName ?? 'Valued Bride'}</strong><br />
+                Ordered on: {new Date(foundOrder.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}<br />
+                Payment: <strong style={{ color: foundOrder.paymentStatus === 'PAID' ? 'var(--ok)' : 'var(--wn)' }}>{foundOrder.paymentStatus}</strong>
               </p>
             </div>
           </div>

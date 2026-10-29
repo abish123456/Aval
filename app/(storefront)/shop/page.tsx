@@ -1,23 +1,84 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
-import { PRODUCTS, CATEGORIES, Product } from '@/lib/data'
+import { useState, useEffect } from 'react'
+import { PRODUCTS, CATEGORIES, Product, Category } from '@/lib/data'
 import { useCart } from '@/context/CartContext'
 
 function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN')
 }
 
+interface ApiProduct {
+  id: string
+  name: string
+  slug: string
+  regularPricePaise: number
+  salePricePaise: number
+  stock: number
+  customisable: boolean
+  isBestSeller?: boolean
+  isNew?: boolean
+  rating: number
+  reviewCount: number
+  images?: string[]
+  sizes?: string[]
+  details?: string[]
+  category?: { name: string; slug: string }
+}
+
 export default function ShopPage() {
   const { addItem } = useCart()
+  const [products, setProducts] = useState<Product[]>(PRODUCTS)
+  const [categories, setCategories] = useState<Category[]>(CATEGORIES)
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [selectedSort, setSelectedSort] = useState<'featured' | 'low-high' | 'high-low'>('featured')
   const [onlyCustomisable, setOnlyCustomisable] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
+  useEffect(() => {
+    fetch('/api/products?pageSize=100')
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
+          setProducts(
+            res.data.data.map((p: ApiProduct) => ({
+              id: p.id,
+              name: p.name,
+              slug: p.slug,
+              category: p.category?.name ?? 'Bridal Bangles',
+              categorySlug: p.category?.slug ?? 'bridal-bangles',
+              regularPrice: p.regularPricePaise / 100,
+              salePrice: p.salePricePaise / 100,
+              discountPercent: Math.round(((p.regularPricePaise - p.salePricePaise) / p.regularPricePaise) * 100),
+              rating: p.rating || 5.0,
+              reviewCount: p.reviewCount || 0,
+              isBestSeller: p.isBestSeller,
+              isNew: p.isNew,
+              customisable: p.customisable,
+              stock: p.stock,
+              description: '',
+              details: Array.isArray(p.details) ? p.details : [],
+              images: Array.isArray(p.images) ? p.images : ['/images/hero_bangles.jpg'],
+              sizes: Array.isArray(p.sizes) ? p.sizes : ['2.4', '2.6'],
+            }))
+          )
+        }
+      })
+      .catch(() => {})
+
+    fetch('/api/categories')
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setCategories(res.data)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   // Filter
-  let filtered = PRODUCTS.filter((p) => {
+  let filtered = products.filter((p) => {
     if (selectedCategory !== 'all' && p.categorySlug !== selectedCategory) return false
     if (onlyCustomisable && !p.customisable) return false
     return true
@@ -50,7 +111,7 @@ export default function ShopPage() {
         <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(22px, 5vw, 32px)', lineHeight: 1.2, color: 'var(--dk)', margin: 0 }}>
           {selectedCategory === 'all'
             ? 'All Handcrafted Designs'
-            : CATEGORIES.find((c) => c.slug === selectedCategory)?.name || 'Bridal Collection'}
+            : categories.find((c) => c.slug === selectedCategory)?.name || 'Bridal Collection'}
         </h1>
         <div style={{ fontSize: '13px', color: 'var(--tx2)', marginTop: '4px' }}>
           Showing {filtered.length} authentic pieces handcrafted in Kanyakumari
@@ -73,9 +134,9 @@ export default function ShopPage() {
             cursor: 'pointer',
           }}
         >
-          All ({PRODUCTS.length})
+          All ({products.length})
         </button>
-        {CATEGORIES.map((cat) => (
+        {categories.map((cat) => (
           <button
             key={cat.slug}
             onClick={() => setSelectedCategory(cat.slug)}
@@ -139,9 +200,9 @@ export default function ShopPage() {
                   checked={selectedCategory === 'all'}
                   onChange={() => setSelectedCategory('all')}
                 />
-                All Jewellery ({PRODUCTS.length})
+                All Jewellery ({products.length})
               </label>
-              {CATEGORIES.map((cat) => (
+              {categories.map((cat) => (
                 <label key={cat.slug} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                   <input
                     type="radio"

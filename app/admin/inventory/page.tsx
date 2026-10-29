@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PRODUCTS } from '@/lib/data'
 
 export default function AdminInventoryPage() {
@@ -13,11 +13,56 @@ export default function AdminInventoryPage() {
       lowStockThreshold: 10,
     }))
   )
+  const [savingId, setSavingId] = useState<string | null>(null)
 
-  const handleStockUpdate = (id: string, delta: number) => {
+  useEffect(() => {
+    fetch('/api/admin/products?pageSize=50')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
+          setItems(
+            res.data.data.map((p: {
+              id: string
+              name: string
+              stock: number
+              category?: { name?: string }
+            }) => ({
+              id: p.id,
+              name: p.name,
+              category: p.category?.name || 'Bridal Jewellery',
+              stock: p.stock,
+              lowStockThreshold: 10,
+            }))
+          )
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const handleStockUpdate = async (id: string, delta: number) => {
+    setSavingId(id)
+    // Optimistic UI update
     setItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, stock: Math.max(0, it.stock + delta) } : it))
     )
+
+    try {
+      const res = await fetch('/api/admin/inventory/adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: id, delta }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success && data.data) {
+        setItems((prev) =>
+          prev.map((it) => (it.id === id ? { ...it, stock: data.data.stock } : it))
+        )
+      }
+    } catch {
+      // Local fallback retained
+    } finally {
+      setSavingId(null)
+    }
   }
 
   return (
@@ -69,20 +114,23 @@ export default function AdminInventoryPage() {
                   <td style={{ padding: '14px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '6px' }}>
                       <button
+                        disabled={savingId === it.id}
                         onClick={() => handleStockUpdate(it.id, -1)}
-                        style={{ padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--bd)', background: 'var(--bg2)', cursor: 'pointer' }}
+                        style={{ padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--bd)', background: 'var(--bg2)', cursor: 'pointer', opacity: savingId === it.id ? 0.6 : 1 }}
                       >
                         −1
                       </button>
                       <button
+                        disabled={savingId === it.id}
                         onClick={() => handleStockUpdate(it.id, +5)}
-                        style={{ padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--bd)', background: 'var(--bg2)', cursor: 'pointer' }}
+                        style={{ padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--bd)', background: 'var(--bg2)', cursor: 'pointer', opacity: savingId === it.id ? 0.6 : 1 }}
                       >
                         +5
                       </button>
                       <button
+                        disabled={savingId === it.id}
                         onClick={() => handleStockUpdate(it.id, +20)}
-                        style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', background: 'var(--bl2)', color: 'var(--pr)', fontWeight: 600, cursor: 'pointer' }}
+                        style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', background: 'var(--bl2)', color: 'var(--pr)', fontWeight: 600, cursor: 'pointer', opacity: savingId === it.id ? 0.6 : 1 }}
                       >
                         +20 Restock
                       </button>

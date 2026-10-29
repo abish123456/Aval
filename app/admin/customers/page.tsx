@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function AdminCustomersPage() {
-  const [customers] = useState([
+  const [customers, setCustomers] = useState([
     {
       id: 'cust-1',
       name: 'Priya Sundaram',
@@ -35,6 +35,17 @@ export default function AdminCustomersPage() {
       weddingDate: '15 Jan 2027',
     },
   ])
+
+  useEffect(() => {
+    fetch('/api/admin/customers')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setCustomers(res.data)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   return (
     <div>

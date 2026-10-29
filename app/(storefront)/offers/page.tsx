@@ -5,10 +5,6 @@ import { useState } from 'react'
 import { PRODUCTS } from '@/lib/data'
 import { useCart } from '@/context/CartContext'
 
-function fmt(n: number) {
-  return '₹' + n.toLocaleString('en-IN')
-}
-
 export default function OffersPage() {
   const { addItem, applyCoupon } = useCart()
   const [copiedCode, setCopiedCode] = useState<string | null>(null)

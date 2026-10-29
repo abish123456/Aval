@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { PRODUCTS, Product } from '@/lib/data'
 import { useCart } from '@/context/CartContext'
 
@@ -15,17 +15,52 @@ function ProductDetailContent() {
   const slug = params?.slug as string
 
   // Look up product or fall back to first item
-  const product: Product =
+  const initialProduct: Product =
     PRODUCTS.find((p) => p.slug === slug) || PRODUCTS[0]
 
+  const [product, setProduct] = useState<Product>(initialProduct)
   const { addItem } = useCart()
 
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || '2.6')
+  const [selectedSize, setSelectedSize] = useState(initialProduct.sizes[0] || '2.6')
   const [name, setName] = useState('')
   const [weddingDate, setWeddingDate] = useState('')
   const [qty, setQty] = useState(1)
   const [activeThumb, setActiveThumb] = useState(0)
   const [addedToast, setAddedToast] = useState(false)
+
+  useEffect(() => {
+    if (!slug) return
+    fetch(`/api/products/${slug}`)
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && res.data) {
+          const p = res.data
+          const mapped: Product = {
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            category: p.category?.name ?? 'Bridal Bangles',
+            categorySlug: p.category?.slug ?? 'bridal-bangles',
+            regularPrice: p.regularPricePaise / 100,
+            salePrice: p.salePricePaise / 100,
+            discountPercent: Math.round(((p.regularPricePaise - p.salePricePaise) / p.regularPricePaise) * 100),
+            rating: p.rating || 5.0,
+            reviewCount: p.reviewCount || 0,
+            isBestSeller: p.isBestSeller,
+            isNew: p.isNew,
+            customisable: p.customisable,
+            stock: p.stock,
+            description: p.description || '',
+            details: Array.isArray(p.details) ? p.details : [],
+            images: Array.isArray(p.images) ? p.images : ['/images/hero_bangles.jpg'],
+            sizes: Array.isArray(p.sizes) ? p.sizes : ['2.4', '2.6'],
+          }
+          setProduct(mapped)
+          if (mapped.sizes?.[0]) setSelectedSize(mapped.sizes[0])
+        }
+      })
+      .catch(() => {})
+  }, [slug])
 
   const customCharge = name.trim() ? 200 : 0
   const unitPrice = product.salePrice + customCharge
@@ -272,6 +307,33 @@ function ProductDetailContent() {
           >
             Buy Now with Express Checkout
           </Link>
+
+          <a
+            href={`https://wa.me/919488000000?text=${encodeURIComponent(
+              `Hi AVAL Store! I want to customise '${product.name}' in size ${selectedSize} for my wedding saree. Can we discuss?`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              width: '100%',
+              height: '44px',
+              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 0,
+              background: '#059669',
+              color: '#ffffff',
+              fontWeight: 600,
+              fontSize: '13px',
+              textDecoration: 'none',
+              gap: '8px',
+              marginTop: '10px',
+              boxShadow: '0 2px 8px rgba(5, 150, 105, 0.25)',
+            }}
+          >
+            💬 Customise on WhatsApp
+          </a>
 
           {/* Trust badges */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '12px', textAlign: 'center', fontSize: '11px', color: 'var(--tx2)' }}>

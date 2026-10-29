@@ -74,16 +74,17 @@ export default function Header() {
           </Link>
 
           <Link
-            href="/account"
+            href="/track-order"
             className="desktop-only"
-            aria-label="My Account"
+            aria-label="Track Order"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none', color: 'inherit', padding: '6px' }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
+              <path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14" />
+              <polyline points="3.29 7 12 12 20.71 7" />
+              <line x1="12" y1="22" x2="12" y2="12" />
             </svg>
-            <span className="desktop-only-text" style={{ fontSize: '13px', fontWeight: 500 }}>Account</span>
+            <span className="desktop-only-text" style={{ fontSize: '13px', fontWeight: 500 }}>Track Order</span>
           </Link>
 
           <Link href="/cart" aria-label="Cart" style={{ display: 'flex', alignItems: 'center', gap: '6px', position: 'relative', textDecoration: 'none', color: 'inherit', padding: '6px' }}>
@@ -259,8 +260,8 @@ export default function Header() {
               Bridal Support
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-              <Link href="/account" onClick={() => setMobileOpen(false)} style={{ color: 'var(--tx)', textDecoration: 'none', fontWeight: 600 }}>
-                👤 My Bridal Account &amp; Quotes
+              <Link href="/track-order" onClick={() => setMobileOpen(false)} style={{ color: 'var(--tx)', textDecoration: 'none', fontWeight: 600 }}>
+                📦 Track Your Order / Private Link
               </Link>
               <Link href="/wishlist" onClick={() => setMobileOpen(false)} style={{ color: 'var(--tx)', textDecoration: 'none' }}>
                 ❤️ Saved Wishlist

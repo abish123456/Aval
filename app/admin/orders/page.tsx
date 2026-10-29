@@ -1,16 +1,100 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { INITIAL_ORDERS, Order } from '@/lib/data'
 
 function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN')
 }
 
+interface ApiOrderItem {
+  id: string
+  qty: number
+  unitPricePaise: number
+  lineTotalPaise: number
+  size?: string
+  customisation?: string
+  snapshotJson: { name?: string; image?: string }
+}
+
+interface ApiOrder {
+  id: string
+  orderNumber: string
+  createdAt: string
+  guestName?: string
+  guestEmail?: string
+  guestPhone?: string
+  fulfilmentStatus: Order['fulfilmentStatus']
+  paymentStatus: Order['paymentStatus']
+  subtotalPaise: number
+  discountPaise: number
+  shippingPaise: number
+  totalPaise: number
+  items: ApiOrderItem[]
+  user?: { name: string; email: string }
+}
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS)
   const [activeTab, setActiveTab] = useState<'ALL' | 'PROCESSING' | 'HANDCRAFTING' | 'SHIPPED' | 'DELIVERED'>('ALL')
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    fetch('/api/admin/orders')
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
+          const loaded: Order[] = res.data.data.map((o: ApiOrder) => ({
+            id: o.id,
+            orderNumber: o.orderNumber,
+            createdAt: o.createdAt,
+            customerName: o.guestName || o.user?.name || 'Customer',
+            email: o.guestEmail || o.user?.email || '',
+            phone: o.guestPhone || '',
+            shippingAddress: {
+              street: 'Studio Hub Delivery',
+              city: 'Kanyakumari',
+              state: 'Tamil Nadu',
+              pincode: '629702',
+            },
+            items: (o.items || []).map((it: ApiOrderItem) => ({
+              id: it.id,
+              product: {
+                id: it.id,
+                name: it.snapshotJson?.name || 'Bridal Item',
+                slug: 'bridal-item',
+                category: 'Bridal Bangles',
+                categorySlug: 'bridal-bangles',
+                regularPrice: it.unitPricePaise / 100,
+                salePrice: it.unitPricePaise / 100,
+                discountPercent: 0,
+                rating: 5,
+                reviewCount: 0,
+                customisable: Boolean(it.customisation),
+                stock: 10,
+                description: '',
+                details: [],
+                images: [it.snapshotJson?.image || '/images/hero_bangles.jpg'],
+                sizes: [it.size || '2.6'],
+              },
+              size: it.size || '2.6',
+              customName: it.customisation,
+              qty: it.qty,
+              price: it.lineTotalPaise / 100,
+            })),
+            subtotal: o.subtotalPaise / 100,
+            discount: o.discountPaise / 100,
+            shipping: o.shippingPaise / 100,
+            total: o.totalPaise / 100,
+            paymentMethod: 'Razorpay UPI',
+            paymentStatus: o.paymentStatus || 'PENDING',
+            fulfilmentStatus: o.fulfilmentStatus || 'CONFIRMED',
+          }))
+          setOrders(loaded)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const filteredOrders = orders.filter((o) => {
     const matchesTab = activeTab === 'ALL' || o.fulfilmentStatus === activeTab
