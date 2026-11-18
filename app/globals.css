@@ -514,18 +514,16 @@ select.input { cursor: pointer; }
 
 /* ── Admin Sidebar ───────────────────────────────────────────── */
 .admin-sidebar {
-  width: 220px;
+  width: 260px;
   background: var(--dk);
   color: #FBF7F3;
-  min-height: 100vh;
-  padding: 20px 14px;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 4px;
   flex-shrink: 0;
   position: sticky;
   top: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 .admin-sidebar-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid rgba(235,211,207,0.15); }
 .admin-sidebar-logo span { font-family: var(--font-script); font-size: 28px; color: var(--bl); }
@@ -1012,6 +1010,17 @@ select.input { cursor: pointer; }
   height: 100vh;
   z-index: 1000;
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Hide scrollbar in Admin Sidebar nav while preserving smooth scrolling */
+.admin-sidebar-nav {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE & Edge */
+}
+.admin-sidebar-nav::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .admin-two-col-grid {

@@ -201,8 +201,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Brand & Mobile Close Button */}
         <div
           style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            padding: '16px 20px',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -211,15 +211,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link
             href="/admin"
             onClick={() => setSidebarOpen(false)}
-            style={{ textDecoration: 'none', color: '#fff', display: 'flex', alignItems: 'center', gap: '12px' }}
+            style={{ textDecoration: 'none', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}
           >
             <img
               src="/logo.png"
               alt="AVAL"
-              style={{ height: '40px', width: 'auto', background: '#fff', borderRadius: '4px', padding: '2px' }}
+              style={{ height: '36px', width: 'auto', background: '#fff', borderRadius: '4px', padding: '2px' }}
             />
             <div>
-              <div style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 700, letterSpacing: '0.1em', color: '#EBD3CF' }}>
+              <div style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, letterSpacing: '0.1em', color: '#EBD3CF' }}>
                 AVAL
               </div>
               <div style={{ fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase', opacity: 0.7 }}>
@@ -247,7 +247,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         {/* Navigation */}
-        <nav style={{ padding: '20px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto' }}>
+        <nav
+          className="admin-sidebar-nav"
+          style={{
+            padding: '14px 12px',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
+            overflowY: 'auto',
+          }}
+        >
           {ADMIN_LINKS.map((link) => {
             const isActive = pathname === link.href
             const { Icon } = link
@@ -259,13 +269,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 16px',
-                  borderRadius: '8px',
+                  gap: '10px',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
                   color: isActive ? '#fff' : 'rgba(255,255,255,0.7)',
                   background: isActive ? 'var(--pr, #7A1026)' : 'transparent',
                   fontWeight: isActive ? 600 : 400,
-                  fontSize: '14px',
+                  fontSize: '13.5px',
                   textDecoration: 'none',
                   transition: 'all 0.15s ease',
                 }}
@@ -278,17 +288,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         {/* Bottom Store Link & User */}
-        <div style={{ padding: '20px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ padding: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <Link
             href="/"
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              fontSize: '13px',
+              fontSize: '12px',
               color: '#EBD3CF',
               textDecoration: 'none',
-              padding: '8px 12px',
+              padding: '7px 10px',
               borderRadius: '6px',
               background: 'rgba(255,255,255,0.06)',
             }}
