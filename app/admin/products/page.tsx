@@ -1,10 +1,10 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { Product } from '@/lib/data'
+import { PageHeader, Notice, useFlash, FlashMessage, adminRequest } from '../_components/ui'
 
 function fmt(n: number) {
-  return '₹' + n.toLocaleString('en-IN')
+  return '₹' + n.toLocaleString('en-IN', Number.isInteger(n) ? undefined : { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // ---------------------------------------------------------------------------
@@ -13,9 +13,11 @@ function fmt(n: number) {
 function ImageGalleryManager({
   images,
   onChange,
+  onError,
 }: {
   images: string[]
   onChange: (images: string[]) => void
+  onError: (message: string) => void
 }) {
   const [urlInput, setUrlInput] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -56,10 +58,10 @@ function ImageGalleryManager({
       if (res.ok && data.success && data.data?.url) {
         onChange([...images, data.data.url])
       } else {
-        alert(data.error || 'Failed to upload image.')
+        onError(data.error || 'Failed to upload image.')
       }
     } catch {
-      alert('Network error while uploading image.')
+      onError('Network error while uploading image.')
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -190,7 +192,7 @@ function ImageGalleryManager({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           style={{ display: 'none' }}
           onChange={handleFileUpload}
         />
@@ -214,7 +216,8 @@ function ImageGalleryManager({
           <input
             type="text"
             className="input"
-            placeholder="Or enter image path: /images/hero_bangles.jpg"
+            placeholder="Or paste an image path, e.g. /uploads/photo.jpg"
+            aria-label="Image path"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             style={{ height: '36px', fontSize: '12px', flex: 1 }}
@@ -237,602 +240,431 @@ function ImageGalleryManager({
 // ---------------------------------------------------------------------------
 // Main Admin Products Page
 // ---------------------------------------------------------------------------
-export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
-  const [submitting, setSubmitting] = useState(false)
 
-  const [newProduct, setNewProduct] = useState({
-    name: '',
-    category: 'Bridal Bangles',
-    categorySlug: 'bridal-bangles',
-    regularPrice: 1999,
-    salePrice: 1599,
-    stock: 20,
-    customisable: true,
-    description: '',
-    images: ['/images/hero_bangles.jpg'],
-  })
+interface AdminProduct {
+  id: string
+  name: string
+  slug: string
+  categoryId: string
+  categoryName: string
+  regularPrice: number
+  salePrice: number
+  stock: number
+  customisable: boolean
+  isBestSeller: boolean
+  isNew: boolean
+  description: string
+  details: string[]
+  images: string[]
+  sizes: string[]
+  archived: boolean
+}
 
-  // Load from MySQL
-  const loadProducts = () => {
-    setLoading(true)
-    fetch('/api/admin/products')
-      .then((res) => res.json())
-      .then((res) => {
-        if (res.success && Array.isArray(res.data?.data)) {
-          setProducts(
-            res.data.data.map((p: {
-              id: string
-              name: string
-              slug: string
-              regularPricePaise: number
-              salePricePaise: number
-              stock: number
-              customisable: boolean
-              rating: number
-              reviewCount: number
-              description: string
-              details?: string[]
-              images?: string[]
-              sizes?: string[]
-              category?: { name: string; slug: string }
-            }) => ({
-              id: p.id,
-              name: p.name,
-              slug: p.slug,
-              category: p.category?.name ?? 'Bridal Bangles',
-              categorySlug: p.category?.slug ?? 'bridal-bangles',
-              regularPrice: p.regularPricePaise / 100,
-              salePrice: p.salePricePaise / 100,
-              discountPercent: Math.round(((p.regularPricePaise - p.salePricePaise) / p.regularPricePaise) * 100),
-              rating: p.rating || 5.0,
-              reviewCount: p.reviewCount || 0,
-              customisable: p.customisable,
-              stock: p.stock,
-              description: p.description || '',
-              details: Array.isArray(p.details) ? p.details : ['Handcrafted bridal accessory'],
-              images: Array.isArray(p.images) && p.images.length > 0 ? p.images : ['/images/kundan_set.jpg'],
-              sizes: Array.isArray(p.sizes) && p.sizes.length > 0 ? p.sizes : ['2.4', '2.6', '2.8'],
-            }))
-          )
-        }
-      })
-      .catch((err) => console.error('Error loading products', err))
-      .finally(() => setLoading(false))
+interface CategoryOption {
+  id: string
+  name: string
+  archived: boolean
+}
+
+interface FormState {
+  id?: string
+  name: string
+  categoryId: string
+  regularPrice: string
+  salePrice: string
+  stock: string
+  customisable: boolean
+  isBestSeller: boolean
+  isNew: boolean
+  description: string
+  details: string
+  sizes: string
+  images: string[]
+}
+
+const EMPTY_FORM: FormState = {
+  name: '',
+  categoryId: '',
+  regularPrice: '',
+  salePrice: '',
+  stock: '0',
+  customisable: false,
+  isBestSeller: false,
+  isNew: true,
+  description: '',
+  details: '',
+  sizes: '',
+  images: [],
+}
+
+function toForm(p: AdminProduct): FormState {
+  return {
+    id: p.id,
+    name: p.name,
+    categoryId: p.categoryId,
+    regularPrice: String(p.regularPrice),
+    salePrice: String(p.salePrice),
+    stock: String(p.stock),
+    customisable: p.customisable,
+    isBestSeller: p.isBestSeller,
+    isNew: p.isNew,
+    description: p.description,
+    details: p.details.join('\n'),
+    sizes: p.sizes.join(', '),
+    images: p.images,
   }
+}
+
+/** Returns an error message, or null when the form is valid. */
+function validate(f: FormState): string | null {
+  if (f.name.trim().length < 2) return 'Enter a product name.'
+  if (!f.categoryId) return 'Choose a category.'
+  const regular = Number(f.regularPrice)
+  const sale = Number(f.salePrice)
+  if (!Number.isFinite(regular) || regular <= 0) return 'Enter the regular price in rupees.'
+  if (!Number.isFinite(sale) || sale <= 0) return 'Enter the selling price in rupees.'
+  if (sale > regular) return 'The selling price can’t be higher than the regular price.'
+  if (!f.id && (!Number.isInteger(Number(f.stock)) || Number(f.stock) < 0)) return 'Stock must be a whole number, 0 or more.'
+  if (f.images.length === 0) return 'Add at least one photo.'
+  return null
+}
+
+const labelStyle: React.CSSProperties = { fontSize: '12px', fontWeight: 600, color: 'var(--dk)', display: 'block', marginBottom: '6px' }
+
+function ProductForm({
+  form,
+  setForm,
+  categories,
+  submitting,
+  onSubmit,
+  onCancel,
+  onError,
+}: {
+  form: FormState
+  setForm: (f: FormState) => void
+  categories: CategoryOption[]
+  submitting: boolean
+  onSubmit: () => void
+  onCancel: () => void
+  onError: (m: string) => void
+}) {
+  const editing = !!form.id
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm({ ...form, [k]: v })
+  const regular = Number(form.regularPrice)
+  const sale = Number(form.salePrice)
+  const priceProblem = form.regularPrice && form.salePrice && sale > regular
+
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="product-form-title" style={{ position: 'fixed', inset: 0, background: 'rgba(58,21,32,0.45)', zIndex: 1500, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '32px 16px' }}>
+      <form
+        onSubmit={(e) => { e.preventDefault(); onSubmit() }}
+        className="card"
+        style={{ background: '#fff', width: '100%', maxWidth: '720px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 id="product-form-title" style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', color: 'var(--dk)', margin: 0 }}>
+            {editing ? 'Edit product' : 'Add product'}
+          </h2>
+          <button type="button" onClick={onCancel} aria-label="Close" style={{ background: 'none', border: 0, fontSize: '20px', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div>
+          <label htmlFor="pf-name" style={labelStyle}>Product name *</label>
+          <input id="pf-name" className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Royal Meenakshi Antique Kada" required />
+        </div>
+
+        <ImageGalleryManager images={form.images} onChange={(imgs) => set('images', imgs)} onError={onError} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+          <div>
+            <label htmlFor="pf-category" style={labelStyle}>Category *</label>
+            <select id="pf-category" className="input" value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)} required>
+              <option value="">Choose…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}{c.archived ? ' (hidden)' : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="pf-regular" style={labelStyle}>Regular price (₹) *</label>
+            <input id="pf-regular" className="input" type="number" min="1" step="1" inputMode="numeric" value={form.regularPrice} onChange={(e) => set('regularPrice', e.target.value)} required />
+          </div>
+          <div>
+            <label htmlFor="pf-sale" style={labelStyle}>Selling price (₹) *</label>
+            <input id="pf-sale" className="input" type="number" min="1" step="1" inputMode="numeric" value={form.salePrice} onChange={(e) => set('salePrice', e.target.value)} required aria-invalid={!!priceProblem} aria-describedby="pf-sale-hint" />
+            <div id="pf-sale-hint" style={{ fontSize: '11px', marginTop: '4px', color: priceProblem ? 'var(--er)' : 'var(--tx2)' }}>
+              {priceProblem ? 'Must not be higher than the regular price' : regular > sale && sale > 0 ? `${Math.round(((regular - sale) / regular) * 100)}% off shown in store` : 'Same as regular = no discount'}
+            </div>
+          </div>
+          <div>
+            <label htmlFor="pf-stock" style={labelStyle}>{editing ? 'Stock' : 'Opening stock *'}</label>
+            {editing ? (
+              <div style={{ fontSize: '14px', padding: '10px 0' }}>
+                {form.stock} units · <a href="/admin/inventory">change in Inventory</a>
+              </div>
+            ) : (
+              <input id="pf-stock" className="input" type="number" min="0" step="1" inputMode="numeric" value={form.stock} onChange={(e) => set('stock', e.target.value)} required />
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="pf-sizes" style={labelStyle}>Sizes customers choose from</label>
+          <input id="pf-sizes" className="input" value={form.sizes} onChange={(e) => set('sizes', e.target.value)} placeholder="e.g. 2.4, 2.6, 2.8 — leave empty for one size" />
+        </div>
+
+        <div>
+          <label htmlFor="pf-desc" style={labelStyle}>Description</label>
+          <textarea id="pf-desc" className="input" rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Materials, stones, finish and styling notes" />
+        </div>
+
+        <div>
+          <label htmlFor="pf-details" style={labelStyle}>Specification bullets (one per line)</label>
+          <textarea id="pf-details" className="input" rows={3} value={form.details} onChange={(e) => set('details', e.target.value)} placeholder={'Hand-set Kundan stones\nShips in velvet gift box'} />
+        </div>
+
+        <fieldset style={{ border: 0, padding: 0, margin: 0, display: 'flex', gap: '18px', flexWrap: 'wrap', fontSize: '13px' }}>
+          <legend style={{ ...labelStyle, marginBottom: '8px' }}>Options</legend>
+          <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input type="checkbox" checked={form.customisable} onChange={(e) => set('customisable', e.target.checked)} /> Offer name personalisation (+₹200)
+          </label>
+          <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input type="checkbox" checked={form.isBestSeller} onChange={(e) => set('isBestSeller', e.target.checked)} /> Best seller badge
+          </label>
+          <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input type="checkbox" checked={form.isNew} onChange={(e) => set('isNew', e.target.checked)} /> New arrival badge
+          </label>
+        </fieldset>
+
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={submitting}>
+            {submitting ? 'Saving…' : editing ? 'Save changes' : 'Add product'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+export default function AdminProductsPage() {
+  const [products, setProducts] = useState<AdminProduct[]>([])
+  const [categories, setCategories] = useState<CategoryOption[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const [form, setForm] = useState<FormState | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState<AdminProduct | null>(null)
+  const [flash, showFlash, clearFlash] = useFlash()
+  const [nonce, setNonce] = useState(0)
+  const reload = () => setNonce((n) => n + 1)
 
   useEffect(() => {
-    loadProducts()
-  }, [])
-
-  // CREATE
-  const handleAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
-    const slug = newProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-
-    try {
-      const res = await fetch('/api/admin/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newProduct.name,
-          slug,
-          categoryId: newProduct.categorySlug === 'hair-clips' ? 'cat-2' : newProduct.categorySlug === 'customised' ? 'cat-3' : 'cat-1',
-          regularPricePaise: Math.round(Number(newProduct.regularPrice) * 100),
-          salePricePaise: Math.round(Number(newProduct.salePrice) * 100),
-          stock: Number(newProduct.stock),
-          customisable: newProduct.customisable,
-          description: newProduct.description || 'Handcrafted bridal accessory made in Kanyakumari.',
-          details: ['Handmade silk thread wrapped', 'Available in standard Indian sizes'],
-          images: newProduct.images.length > 0 ? newProduct.images : ['/images/kundan_set.jpg'],
-          sizes: ['2.4', '2.6', '2.8'],
-        }),
+    let cancelled = false
+    Promise.all([
+      fetch(`/api/admin/products?pageSize=100&archived=${showArchived}`, { cache: 'no-store' }).then((r) => r.json()),
+      fetch('/api/admin/categories', { cache: 'no-store' }).then((r) => r.json()),
+    ])
+      .then(([prod, cats]) => {
+        if (cancelled) return
+        if (!prod?.success) {
+          setLoadError(typeof prod?.error === 'string' ? prod.error : 'Could not load products.')
+          return
+        }
+        setLoadError(null)
+        setProducts(
+          (prod.data.data as Array<Record<string, unknown> & { category?: { id: string; name: string } }>).map((p) => ({
+            id: p.id as string,
+            name: p.name as string,
+            slug: p.slug as string,
+            categoryId: (p.categoryId as string) ?? p.category?.id ?? '',
+            categoryName: p.category?.name ?? '',
+            regularPrice: (p.regularPricePaise as number) / 100,
+            salePrice: (p.salePricePaise as number) / 100,
+            stock: p.stock as number,
+            customisable: !!p.customisable,
+            isBestSeller: !!p.isBestSeller,
+            isNew: !!p.isNew,
+            description: (p.description as string) ?? '',
+            details: Array.isArray(p.details) ? (p.details as string[]) : [],
+            images: Array.isArray(p.images) ? (p.images as string[]) : [],
+            sizes: Array.isArray(p.sizes) ? (p.sizes as string[]) : [],
+            archived: !!p.archived,
+          }))
+        )
+        if (cats?.success && Array.isArray(cats.data)) {
+          setCategories(cats.data.map((c: CategoryOption) => ({ id: c.id, name: c.name, archived: c.archived })))
+        }
       })
-
-      const data = await res.json()
-      if (res.ok && data.success) {
-        setShowAddModal(false)
-        setNewProduct({
-          name: '',
-          category: 'Bridal Bangles',
-          categorySlug: 'bridal-bangles',
-          regularPrice: 1999,
-          salePrice: 1599,
-          stock: 20,
-          customisable: true,
-          description: '',
-          images: ['/images/hero_bangles.jpg'],
-        })
-        loadProducts()
-        alert('Product added and published successfully!')
-      } else {
-        alert(data.error || 'Failed to save product to database.')
-      }
-    } catch (err) {
-      console.error(err)
-      alert('Network error while saving product.')
-    } finally {
-      setSubmitting(false)
+      .catch(() => {
+        if (!cancelled) setLoadError('Could not reach the server.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
+  }, [showArchived, nonce])
+
+  async function save() {
+    if (!form) return
+    const problem = validate(form)
+    if (problem) return showFlash('error', problem)
+    setSubmitting(true)
+    const payload = {
+      name: form.name.trim(),
+      categoryId: form.categoryId,
+      regularPricePaise: Math.round(Number(form.regularPrice) * 100),
+      salePricePaise: Math.round(Number(form.salePrice) * 100),
+      customisable: form.customisable,
+      isBestSeller: form.isBestSeller,
+      isNew: form.isNew,
+      description: form.description.trim(),
+      details: form.details.split('\n').map((d) => d.trim()).filter(Boolean),
+      sizes: form.sizes.split(',').map((d) => d.trim()).filter(Boolean),
+      images: form.images,
+      ...(form.id ? {} : { stock: Number(form.stock) }),
+    }
+    const r = form.id
+      ? await adminRequest(`/api/admin/products/${form.id}`, 'PATCH', payload)
+      : await adminRequest('/api/admin/products', 'POST', payload)
+    setSubmitting(false)
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not save the product.')
+    showFlash('ok', form.id ? 'Product updated.' : 'Product added. It is now live in the store.')
+    setForm(null)
+    reload()
   }
 
-  // UPDATE
-  const handleUpdateProduct = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingProduct) return
-    setSubmitting(true)
-
-    try {
-      const res = await fetch(`/api/admin/products/${editingProduct.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editingProduct.name,
-          regularPricePaise: Math.round(Number(editingProduct.regularPrice) * 100),
-          salePricePaise: Math.round(Number(editingProduct.salePrice) * 100),
-          stock: Number(editingProduct.stock),
-          customisable: editingProduct.customisable,
-          description: editingProduct.description,
-          images: editingProduct.images,
-        }),
-      })
-
-      const data = await res.json()
-      if (res.ok && data.success) {
-        setEditingProduct(null)
-        loadProducts()
-        alert('Product updated successfully!')
-      } else {
-        alert(data.error || 'Failed to update product.')
-      }
-    } catch (err) {
-      console.error(err)
-      alert('Network error while updating product.')
-    } finally {
-      setSubmitting(false)
-    }
+  async function remove(p: AdminProduct) {
+    setConfirmRemove(null)
+    const r = await adminRequest<{ deleted?: boolean; archived?: boolean }>(`/api/admin/products/${p.id}`, 'DELETE')
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not remove the product.')
+    showFlash(
+      'ok',
+      r.data?.archived
+        ? `“${p.name}” has order or stock history, so it was hidden from the store instead of deleted. Find it under Hidden products.`
+        : `“${p.name}” deleted.`
+    )
+    reload()
   }
 
-  // DELETE
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this product from the database?')) return
-    try {
-      const res = await fetch(`/api/admin/products/${id}`, { method: 'DELETE' })
-      if (res.ok) {
-        setProducts((prev) => prev.filter((p) => p.id !== id))
-        alert('Product deleted successfully!')
-      } else {
-        setProducts((prev) => prev.filter((p) => p.id !== id))
-      }
-    } catch {
-      setProducts((prev) => prev.filter((p) => p.id !== id))
-    }
+  async function restore(p: AdminProduct) {
+    const r = await adminRequest(`/api/admin/products/${p.id}`, 'PATCH', { archived: false })
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not restore the product.')
+    showFlash('ok', `“${p.name}” is back in the store.`)
+    reload()
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '28px', color: 'var(--dk)', margin: 0, fontWeight: 600 }}>
-            Product Catalogue &amp; Media
-          </h1>
-          <p style={{ color: 'var(--tx2)', fontSize: '13px', marginTop: '4px' }}>
-            Manage handcrafted designs, multiple gallery photos, and set primary cover images.
-          </p>
-        </div>
+      <PageHeader
+        title="Products"
+        subtitle="Photos, prices, sizes and badges for every design in the store"
+        actions={
+          <>
+            <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '13px' }}>
+              <input type="checkbox" checked={showArchived} onChange={(e) => { setLoading(true); setShowArchived(e.target.checked) }} /> Show hidden products
+            </label>
+            <button type="button" className="btn btn-primary" onClick={() => setForm({ ...EMPTY_FORM, categoryId: categories.find((c) => !c.archived)?.id ?? '' })}>
+              Add product
+            </button>
+          </>
+        }
+      />
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="btn btn-primary"
-          style={{ padding: '10px 20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Add New Bridal Design
-        </button>
-      </div>
-
-      {/* Products Table */}
-      <div className="card" style={{ padding: '24px', background: '#fff', border: '1px solid #EBE4E0' }}>
-        {loading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--tx2)' }}>Loading catalogue...</div>
-        ) : products.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--tx2)' }}>No products found in catalogue.</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--bd)', color: 'var(--tx2)' }}>
-                  <th style={{ padding: '12px 14px' }}>Main Image &amp; Product</th>
-                  <th style={{ padding: '12px 14px' }}>Category</th>
-                  <th style={{ padding: '12px 14px' }}>Sale Price</th>
-                  <th style={{ padding: '12px 14px' }}>Stock</th>
-                  <th style={{ padding: '12px 14px' }}>Photos</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right' }}>Actions</th>
+      {loadError ? (
+        <Notice kind="error">{loadError}</Notice>
+      ) : loading ? (
+        <Notice>Loading products…</Notice>
+      ) : products.length === 0 ? (
+        <Notice>{showArchived ? 'No hidden products.' : 'No products yet. Add your first design.'}</Notice>
+      ) : (
+        <div className="card" style={{ padding: '8px 16px', overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th style={{ textAlign: 'right' }}>Price</th>
+                <th style={{ textAlign: 'right' }}>Stock</th>
+                <th>Sizes</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((p) => (
+                <tr key={p.id}>
+                  <td>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.images[0] ?? '/images/hero_bangles.jpg'} alt="" width={44} height={44} style={{ objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
+                      <div style={{ minWidth: 0 }}>
+                        <a href={`/product/${p.slug}`} target="_blank" style={{ fontWeight: 600, color: 'var(--dk)' }}>{p.name}</a>
+                        <div style={{ fontSize: '11px', color: 'var(--tx2)' }}>
+                          {p.images.length} photo{p.images.length === 1 ? '' : 's'}
+                          {p.isBestSeller ? ' · Best seller' : ''}{p.isNew ? ' · New' : ''}{p.customisable ? ' · Personalisable' : ''}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{p.categoryName || '—'}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <strong>{fmt(p.salePrice)}</strong>
+                    {p.regularPrice > p.salePrice && <div style={{ fontSize: '11px', color: 'var(--tx2)', textDecoration: 'line-through' }}>{fmt(p.regularPrice)}</div>}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <span className={`tag ${p.stock === 0 ? 'tag-error' : p.stock < 10 ? 'tag-warning' : 'tag-ok'}`}>{p.stock}</span>
+                  </td>
+                  <td style={{ fontSize: '12px' }}>{p.sizes.length ? p.sizes.join(', ') : 'One size'}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {p.archived ? (
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => restore(p)}>Show in store</button>
+                    ) : (
+                      <>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => setForm(toForm(p))}>Edit</button>{' '}
+                        <button type="button" onClick={() => setConfirmRemove(p)} style={{ background: 'none', border: 0, color: 'var(--er)', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}>
+                          Remove
+                        </button>
+                      </>
+                    )}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {products.map((p) => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid #F0E8E6' }}>
-                    <td style={{ padding: '14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ position: 'relative', width: '48px', height: '48px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--bd)', flexShrink: 0 }}>
-                          <img
-                            src={p.images?.[0] || '/images/kundan_set.jpg'}
-                            alt={p.name}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600, color: 'var(--dk)' }}>{p.name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--tx2)', fontFamily: 'monospace' }}>slug: {p.slug}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ padding: '14px', color: 'var(--tx2)' }}>{p.category}</td>
-                    <td style={{ padding: '14px' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--pr)' }}>{fmt(p.salePrice)}</span>{' '}
-                      <span style={{ textDecoration: 'line-through', color: 'var(--tx2)', fontSize: '11px', marginLeft: '4px' }}>
-                        {fmt(p.regularPrice)}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px' }}>
-                      <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          background: p.stock < 10 ? '#fbe8c8' : '#dcefe1',
-                          color: p.stock < 10 ? 'var(--wn)' : 'var(--ok)',
-                        }}
-                      >
-                        {p.stock} units
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px' }}>
-                      <span style={{ fontSize: '12px', color: 'var(--tx2)' }}>
-                        {p.images?.length ?? 1} {p.images?.length === 1 ? 'photo' : 'photos'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px', textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '12px', alignItems: 'center' }}>
-                        <button
-                          onClick={() => setEditingProduct({ ...p })}
-                          style={{
-                            background: 'var(--bl2)',
-                            color: 'var(--pr)',
-                            border: '1px solid var(--bd)',
-                            borderRadius: '4px',
-                            padding: '4px 10px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                          }}
-                        >
-                          Edit &amp; Photos
-                        </button>
-                        <button
-                          onClick={() => handleDelete(p.id)}
-                          style={{ background: 'none', border: 'none', color: '#b91c1c', cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {/* CREATE MODAL */}
-      {showAddModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-            padding: '20px',
-          }}
-        >
-          <div
-            className="card"
-            style={{
-              width: '100%',
-              maxWidth: '600px',
-              background: '#fff',
-              padding: '32px',
-              borderRadius: '8px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', color: 'var(--dk)', margin: 0 }}>
-                Add New Bridal Design
-              </h2>
-              <button
-                onClick={() => setShowAddModal(false)}
-                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
+      {confirmRemove && (
+        <div role="alertdialog" aria-modal="true" aria-labelledby="remove-title" style={{ position: 'fixed', inset: 0, background: 'rgba(58,21,32,0.45)', zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div className="card" style={{ background: '#fff', maxWidth: '420px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <h2 id="remove-title" style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', margin: 0, color: 'var(--dk)' }}>Remove “{confirmRemove.name}”?</h2>
+            <p style={{ fontSize: '14px', color: 'var(--tx2)', margin: 0 }}>
+              It disappears from the store straight away. If it has ever been ordered or had stock changes, it is hidden rather than deleted so your records stay intact, and you can bring it back later.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setConfirmRemove(null)}>Keep it</button>
+              <button type="button" className="btn btn-primary" onClick={() => remove(confirmRemove)}>Remove</button>
             </div>
-
-            <form onSubmit={handleAddProduct} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <label className="input-label" style={{ fontSize: '13px' }}>
-                Product Title *
-                <input
-                  type="text"
-                  required
-                  className="input"
-                  placeholder="e.g. Royal Meenakshi Antique Kada"
-                  value={newProduct.name}
-                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                />
-              </label>
-
-              {/* Image Manager in Add Modal */}
-              <div style={{ background: '#faf8f6', padding: '16px', borderRadius: '6px', border: '1px solid var(--bd)' }}>
-                <ImageGalleryManager
-                  images={newProduct.images}
-                  onChange={(imgs) => setNewProduct({ ...newProduct, images: imgs })}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
-                <label className="input-label" style={{ fontSize: '13px' }}>
-                  Category
-                  <select
-                    className="input"
-                    value={newProduct.category}
-                    onChange={(e) => {
-                      const cat = e.target.value
-                      const slug = cat.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-                      setNewProduct({ ...newProduct, category: cat, categorySlug: slug })
-                    }}
-                  >
-                    <option>Bridal Bangles</option>
-                    <option>Hair Clips &amp; Pins</option>
-                    <option>Customised Name Sets</option>
-                    <option>Bridesmaid Favours</option>
-                  </select>
-                </label>
-
-                <label className="input-label" style={{ fontSize: '13px' }}>
-                  Initial Stock Count
-                  <input
-                    type="number"
-                    required
-                    className="input"
-                    value={newProduct.stock}
-                    onChange={(e) => setNewProduct({ ...newProduct, stock: Number(e.target.value) })}
-                  />
-                </label>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
-                <label className="input-label" style={{ fontSize: '13px' }}>
-                  Regular Price (₹) *
-                  <input
-                    type="number"
-                    required
-                    className="input"
-                    value={newProduct.regularPrice}
-                    onChange={(e) => setNewProduct({ ...newProduct, regularPrice: Number(e.target.value) })}
-                  />
-                </label>
-
-                <label className="input-label" style={{ fontSize: '13px' }}>
-                  Sale Price (₹) *
-                  <input
-                    type="number"
-                    required
-                    className="input"
-                    value={newProduct.salePrice}
-                    onChange={(e) => setNewProduct({ ...newProduct, salePrice: Number(e.target.value) })}
-                  />
-                </label>
-              </div>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={newProduct.customisable}
-                  onChange={(e) => setNewProduct({ ...newProduct, customisable: e.target.checked })}
-                />
-                Allow Name &amp; Date Personalisation (+₹200)
-              </label>
-
-              <label className="input-label" style={{ fontSize: '13px' }}>
-                Description
-                <textarea
-                  className="input"
-                  rows={3}
-                  placeholder="Artisan handcraft materials, stone quality, and wedding styling notes..."
-                  value={newProduct.description}
-                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                />
-              </label>
-
-              <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-                <button type="submit" disabled={submitting} className="btn btn-primary" style={{ flex: 1, padding: '12px 0' }}>
-                  {submitting ? 'Saving to Database...' : 'Save & Publish Design'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="btn btn-secondary"
-                  style={{ padding: '12px 20px' }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
 
-      {/* UPDATE / EDIT MODAL */}
-      {editingProduct && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-            padding: '20px',
-          }}
-        >
-          <div
-            className="card"
-            style={{
-              width: '100%',
-              maxWidth: '620px',
-              background: '#fff',
-              padding: '32px',
-              borderRadius: '8px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div>
-                <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', color: 'var(--dk)', margin: 0 }}>
-                  Edit Bridal Design &amp; Photos
-                </h2>
-                <div style={{ fontSize: '12px', color: 'var(--tx2)', marginTop: '2px', fontFamily: 'monospace' }}>
-                  ID: {editingProduct.id}
-                </div>
-              </div>
-              <button
-                onClick={() => setEditingProduct(null)}
-                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateProduct} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <label className="input-label" style={{ fontSize: '13px' }}>
-                Product Title *
-                <input
-                  type="text"
-                  required
-                  className="input"
-                  value={editingProduct.name}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                />
-              </label>
-
-              {/* Image Manager in Edit Modal */}
-              <div style={{ background: '#faf8f6', padding: '16px', borderRadius: '6px', border: '1px solid var(--bd)' }}>
-                <ImageGalleryManager
-                  images={editingProduct.images || []}
-                  onChange={(imgs) => setEditingProduct({ ...editingProduct, images: imgs })}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
-                <label className="input-label" style={{ fontSize: '13px' }}>
-                  Stock Count
-                  <input
-                    type="number"
-                    required
-                    className="input"
-                    value={editingProduct.stock}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, stock: Number(e.target.value) })}
-                  />
-                </label>
-
-                <label className="input-label" style={{ fontSize: '13px' }}>
-                  Category
-                  <input
-                    type="text"
-                    disabled
-                    className="input"
-                    value={editingProduct.category}
-                    style={{ background: '#f5f5f5', color: '#666' }}
-                  />
-                </label>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
-                <label className="input-label" style={{ fontSize: '13px' }}>
-                  Regular Price (₹) *
-                  <input
-                    type="number"
-                    required
-                    className="input"
-                    value={editingProduct.regularPrice}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, regularPrice: Number(e.target.value) })}
-                  />
-                </label>
-
-                <label className="input-label" style={{ fontSize: '13px' }}>
-                  Sale Price (₹) *
-                  <input
-                    type="number"
-                    required
-                    className="input"
-                    value={editingProduct.salePrice}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, salePrice: Number(e.target.value) })}
-                  />
-                </label>
-              </div>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={editingProduct.customisable}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, customisable: e.target.checked })}
-                />
-                Allow Name &amp; Date Personalisation (+₹200)
-              </label>
-
-              <label className="input-label" style={{ fontSize: '13px' }}>
-                Description
-                <textarea
-                  className="input"
-                  rows={3}
-                  value={editingProduct.description}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
-                />
-              </label>
-
-              <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-                <button type="submit" disabled={submitting} className="btn btn-primary" style={{ flex: 1, padding: '12px 0' }}>
-                  {submitting ? 'Updating Database...' : 'Update & Save Changes'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="btn btn-secondary"
-                  style={{ padding: '12px 20px' }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {form && (
+        <ProductForm
+          form={form}
+          setForm={setForm}
+          categories={categories}
+          submitting={submitting}
+          onSubmit={save}
+          onCancel={() => setForm(null)}
+          onError={(m) => showFlash('error', m)}
+        />
       )}
+
+      <FlashMessage flash={flash} onClose={clearFlash} />
     </div>
   )
 }

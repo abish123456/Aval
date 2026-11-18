@@ -10,6 +10,9 @@ import type {
 } from './types'
 import { DEFAULT_PRICING_SETTINGS } from './types'
 
+export const DEFAULT_FREE_SHIPPING_THRESHOLD_PAISE = 150000 // ₹1,500
+export const DEFAULT_FLAT_SHIPPING_PAISE = 9900 // ₹99
+
 // ---------------------------------------------------------------------------
 // Main entry point: priceCart
 // ---------------------------------------------------------------------------
@@ -57,8 +60,8 @@ export async function priceCart(
     const unitPricePaise = product.salePricePaise
     const regularPricePaise = product.regularPricePaise
 
-    // Customisation surcharge: ₹200 (2000 paise) if customisation text provided
-    const customisationChargePaise = line.customisation ? 2000 : 0
+    // Customisation surcharge: ₹200 (20000 paise) if customisation text provided
+    const customisationChargePaise = line.customisation ? 20000 : 0
 
     const lineTotalPaise = (unitPricePaise + customisationChargePaise) * qty
 
@@ -313,6 +316,10 @@ export async function loadPricingSettings(): Promise<PricingSettings> {
     where: {
       key: {
         in: [
+          // keys written by the admin Settings page
+          'free_shipping_threshold_paise',
+          'shipping_flat_fee_paise',
+          // legacy keys
           'freeShippingThresholdPaise',
           'flatShippingPaise',
           'taxMode',
@@ -324,10 +331,15 @@ export async function loadPricingSettings(): Promise<PricingSettings> {
   })
 
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+  const int = (v: string | undefined, fallback: number) => {
+    const n = parseInt(v ?? '', 10)
+    return Number.isFinite(n) && n >= 0 ? n : fallback
+  }
 
   return {
-    freeShippingThresholdPaise: parseInt(map.freeShippingThresholdPaise ?? '50000'),
-    flatShippingPaise: parseInt(map.flatShippingPaise ?? '8000'),
+    // Defaults match the storefront copy: free shipping from ₹1,500, otherwise ₹99
+    freeShippingThresholdPaise: int(map.free_shipping_threshold_paise ?? map.freeShippingThresholdPaise, DEFAULT_FREE_SHIPPING_THRESHOLD_PAISE),
+    flatShippingPaise: int(map.shipping_flat_fee_paise ?? map.flatShippingPaise, DEFAULT_FLAT_SHIPPING_PAISE),
     taxMode: (map.taxMode as 'NONE' | 'INCLUSIVE' | 'EXCLUSIVE') ?? 'NONE',
     taxRateBp: parseInt(map.taxRateBp ?? '0'),
     stackItemOffers: map.stackItemOffers === 'true',

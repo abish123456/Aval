@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import React, { useState } from 'react'
 
 // SVG icon components — professional, no emoji
@@ -108,19 +108,76 @@ const ADMIN_LINKS = [
   { href: '/admin/categories',  label: 'Categories',       Icon: IconCategories },
   { href: '/admin/inventory',   label: 'Inventory',        Icon: IconInventory },
   { href: '/admin/customers',   label: 'Customers',        Icon: IconCustomers },
-  { href: '/admin/promotions',  label: 'Promotions',       Icon: IconPromotions },
+  { href: '/admin/promotions',  label: 'Coupons',          Icon: IconPromotions },
   { href: '/admin/reviews',     label: 'Reviews',          Icon: IconReviews },
   { href: '/admin/reports',     label: 'Reports',          Icon: IconReports },
   { href: '/admin/settings',    label: 'Settings',         Icon: IconSettings },
 ]
 
+interface AdminUser { name: string; email: string; role: string }
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [adminUser, setAdminUser] = React.useState<AdminUser | null>(null)
+  const isLogin = pathname === '/admin/login'
+
+  // Only staff may see admin pages. proxy.ts already bounces visitors without a
+  // session; this also bounces signed-in customers and revoked sessions.
+  React.useEffect(() => {
+    if (isLogin) return
+    let cancelled = false
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (cancelled) return
+        const user = d?.success ? (d.data as AdminUser) : null
+        if (user && (user.role === 'OWNER' || user.role === 'STAFF')) setAdminUser(user)
+        else router.replace(`/admin/login?next=${encodeURIComponent(pathname)}`)
+      })
+      .catch(() => {
+        if (!cancelled) router.replace('/admin/login')
+      })
+    return () => { cancelled = true }
+  }, [isLogin, pathname, router])
+
+  // Live count for the top-bar badge: orders waiting for payment
+  const [awaitingCount, setAwaitingCount] = React.useState<number | null>(null)
+  React.useEffect(() => {
+    if (!adminUser) return
+    let cancelled = false
+    fetch('/api/admin/enquiries?payment=unpaid&limit=1', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d?.success) setAwaitingCount(d.data.total ?? 0) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [adminUser, pathname])
+
+  // Esc closes the mobile drawer
+  React.useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSidebarOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sidebarOpen])
+
+  async function signOut() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    router.replace('/admin/login')
+  }
 
   // Don't render admin chrome on login screen
-  if (pathname === '/admin/login') {
+  if (isLogin) {
     return <>{children}</>
+  }
+
+  if (!adminUser) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8F6F4', color: '#6b5a5e', fontSize: '14px' }} aria-busy="true">
+        Checking your session…
+      </div>
+    )
   }
 
   return (
@@ -255,11 +312,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 fontWeight: 600,
               }}
             >
-              AS
+              {adminUser.name.slice(0, 2).toUpperCase()}
             </div>
             <div style={{ fontSize: '12px' }}>
-              <div style={{ fontWeight: 600, color: '#fff' }}>Abishek / Admin</div>
-              <div style={{ opacity: 0.6, fontSize: '11px' }}>Kanyakumari Studio</div>
+              <div style={{ fontWeight: 600, color: '#fff' }}>{adminUser.name}</div>
+              <div style={{ opacity: 0.6, fontSize: '11px' }}>{adminUser.role}</div>
+              <button type="button" onClick={signOut} style={{ background: 'none', border: 0, padding: 0, marginTop: '4px', color: '#fff', opacity: 0.8, fontSize: '11px', textDecoration: 'underline', cursor: 'pointer' }}>
+                Sign out
+              </button>
             </div>
           </div>
         </div>
@@ -294,9 +354,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 padding: '8px',
                 cursor: 'pointer',
                 color: 'var(--dk)',
-                display: 'none',
               }}
               aria-label="Open navigation menu"
+              aria-expanded={sidebarOpen}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="3" y1="12" x2="21" y2="12" />
@@ -326,8 +386,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 fontWeight: 500,
               }}
             >
-              <span>Pending</span>
+              <span>Awaiting payment</span>
               <span
+                aria-label={awaitingCount === null ? 'loading' : `${awaitingCount} orders`}
                 style={{
                   marginLeft: '6px',
                   background: 'var(--pr)',
@@ -338,7 +399,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   fontWeight: 600,
                 }}
               >
-                2
+                {awaitingCount ?? '…'}
               </span>
             </Link>
           </div>

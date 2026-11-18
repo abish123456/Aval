@@ -6,12 +6,13 @@ import { useRouter } from 'next/navigation'
 import { useCart } from '@/context/CartContext'
 
 function fmt(n: number) {
-  return '₹' + n.toLocaleString('en-IN')
+  // Whole rupees print plainly; percentage coupons can leave paise, shown as .xx
+  return '₹' + n.toLocaleString('en-IN', Number.isInteger(n) ? undefined : { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { items, clearCart } = useCart()
+  const { items, clearCart, hydrated, couponCode, subtotal, discount, shipping, total, quote, quoteError } = useCart()
 
   const [form, setForm] = useState({
     customerName: '',
@@ -25,6 +26,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Display-only summary. The server looks up real prices when the order is placed.
   const cart = items.map((item) => ({
     productId: item.product.id || item.id,
     productName:
@@ -34,10 +36,21 @@ export default function CheckoutPage() {
     unitPaise: Math.round(item.price * 100),
   }))
 
-  const totalPaise = cart.reduce((s, i) => s + i.unitPaise * i.qty, 0)
 
   function set(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }))
+  }
+
+  function validate(): string | null {
+    const digits = (v: string) => v.replace(/\D/g, '').slice(-10)
+    if (form.customerName.trim().length < 2) return 'Enter your name.'
+    if (!/^[6-9]\d{9}$/.test(digits(form.customerPhone))) return 'Enter a valid 10-digit phone number.'
+    if (!/^[6-9]\d{9}$/.test(digits(form.customerWhatsapp))) return 'Enter a valid 10-digit WhatsApp number.'
+    if (form.street.trim().length < 5) return 'Enter your full street address.'
+    if (form.city.trim().length < 2) return 'Enter your city.'
+    if (form.state.trim().length < 2) return 'Enter your state.'
+    if (!/^\d{6}$/.test(form.pincode)) return 'Enter a 6-digit pincode.'
+    return null
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -46,6 +59,12 @@ export default function CheckoutPage() {
 
     if (cart.length === 0) {
       setError('Your bag is empty. Please select bangles from the showroom first.')
+      return
+    }
+
+    const problem = validate()
+    if (problem) {
+      setError(problem)
       return
     }
 
@@ -64,13 +83,25 @@ export default function CheckoutPage() {
             state: form.state,
             pincode: form.pincode,
           },
-          items: cart,
+          items: items.map((item) => ({
+            productId: item.product.id,
+            size: item.size,
+            qty: item.quantity,
+            customName: item.customName?.trim() || undefined,
+            weddingDate: item.weddingDate?.trim() || undefined,
+          })),
+          couponCode: couponCode && !quote?.couponError ? couponCode : undefined,
         }),
       })
 
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(data.error ?? 'Something went wrong. Please check details and try again.')
+        // Only ever render a string, whatever shape the server returns
+        setError(
+          typeof data?.error === 'string'
+            ? data.error
+            : 'Something went wrong. Please check your details and try again.'
+        )
         return
       }
 
@@ -85,6 +116,10 @@ export default function CheckoutPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (!hydrated) {
+    return <div style={{ minHeight: '85vh', background: 'var(--bg)' }} aria-busy="true" />
   }
 
   if (cart.length === 0) {
@@ -184,6 +219,9 @@ export default function CheckoutPage() {
                   <input
                     type="tel"
                     required
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    maxLength={14}
                     className="input"
                     placeholder="9876543210"
                     value={form.customerPhone}
@@ -198,6 +236,8 @@ export default function CheckoutPage() {
                   <input
                     type="tel"
                     required
+                    inputMode="numeric"
+                    maxLength={14}
                     className="input"
                     placeholder="9876543210"
                     value={form.customerWhatsapp}
@@ -272,6 +312,7 @@ export default function CheckoutPage() {
 
               {error && (
                 <div
+                  role="alert"
                   style={{
                     background: 'var(--er-bg)',
                     color: 'var(--er)',
@@ -352,12 +393,25 @@ export default function CheckoutPage() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: 'var(--tx2)' }}>
                 <span>Subtotal</span>
-                <span>{fmt(totalPaise / 100)}</span>
+                <span>{fmt(subtotal)}</span>
               </div>
+              {discount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: 'var(--ok)' }}>
+                  <span>Coupon {quote?.couponCode}</span>
+                  <span>− {fmt(discount)}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px', fontSize: '13px', color: 'var(--tx2)' }}>
                 <span>Bridal Courier &amp; Packaging</span>
-                <span style={{ color: 'var(--ok)', fontWeight: 600 }}>FREE</span>
+                {shipping === 0 ? (
+                  <span style={{ color: 'var(--ok)', fontWeight: 600 }}>FREE</span>
+                ) : (
+                  <span>{fmt(shipping)}</span>
+                )}
               </div>
+              {quoteError && (
+                <div role="alert" style={{ fontSize: '12px', color: 'var(--er)', marginBottom: '12px' }}>{quoteError}</div>
+              )}
 
               <div
                 style={{
@@ -371,7 +425,7 @@ export default function CheckoutPage() {
                 }}
               >
                 <span>Total Amount</span>
-                <span>{fmt(totalPaise / 100)}</span>
+                <span>{fmt(total)}</span>
               </div>
 
               <div

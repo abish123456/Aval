@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react'
 import { Product } from '@/lib/data'
 
 export interface CartItem {
@@ -10,144 +10,236 @@ export interface CartItem {
   customName?: string
   weddingDate?: string
   quantity: number
-  price: number
+  price: number // display estimate only — the server prices the order
+}
+
+/** What the server will charge, from POST /api/enquiries/quote */
+export interface CartQuote {
+  subtotalPaise: number
+  discountPaise: number
+  shippingPaise: number
+  totalPaise: number
+  couponCode: string | null
+  couponError: string | null
+  freeShippingRemainingPaise: number
 }
 
 interface CartContextType {
   items: CartItem[]
+  hydrated: boolean
   addItem: (product: Product, size: string, customName?: string, weddingDate?: string, quantity?: number) => void
   removeItem: (itemId: string) => void
   updateQuantity: (itemId: string, quantity: number) => void
   clearCart: () => void
   itemCount: number
+  /** Rupees. Server values once the quote has loaded, local estimate before that. */
   subtotal: number
   discount: number
   shipping: number
   total: number
+  quote: CartQuote | null
+  quoteError: string | null
+  quoteLoading: boolean
   couponCode: string
-  setCouponCode: (code: string) => void
-  applyCoupon: (code: string) => boolean
-  couponDiscount: number
+  applyCoupon: (code: string) => Promise<{ ok: boolean; message: string }>
+  removeCoupon: () => void
+}
+
+// ---------------------------------------------------------------------------
+// localStorage-backed store read through useSyncExternalStore.
+// The server snapshot is always empty, so hydration never mismatches; the
+// browser snapshot takes over right after hydration.
+// ---------------------------------------------------------------------------
+
+interface CartState {
+  items: CartItem[]
+  couponCode: string
+}
+
+const STORAGE_KEY = 'aval_cart'
+const COUPON_KEY = 'aval_coupon'
+const EMPTY: CartState = { items: [], couponCode: '' }
+
+let state: CartState | null = null
+const listeners = new Set<() => void>()
+
+function readStorage(): CartState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    const items = raw ? (JSON.parse(raw) as CartItem[]) : []
+    return { items: Array.isArray(items) ? items : [], couponCode: localStorage.getItem(COUPON_KEY) ?? '' }
+  } catch {
+    return EMPTY
+  }
+}
+
+function getSnapshot(): CartState {
+  if (state === null) state = readStorage()
+  return state
+}
+
+function getServerSnapshot(): CartState {
+  return EMPTY
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener)
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === STORAGE_KEY || e.key === COUPON_KEY) {
+      state = readStorage()
+      listener()
+    }
+  }
+  window.addEventListener('storage', onStorage)
+  return () => {
+    listeners.delete(listener)
+    window.removeEventListener('storage', onStorage)
+  }
+}
+
+function setState(update: (prev: CartState) => CartState) {
+  state = update(getSnapshot())
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items))
+    if (state.couponCode) localStorage.setItem(COUPON_KEY, state.couponCode)
+    else localStorage.removeItem(COUPON_KEY)
+  } catch {
+    // storage unavailable (private mode) — keep in memory
+  }
+  listeners.forEach((l) => l())
+}
+
+const noopSubscribe = () => () => {}
+
+function toQuoteItems(items: CartItem[]) {
+  return items.map((i) => ({
+    productId: i.product.id,
+    size: i.size,
+    qty: i.quantity,
+    customName: i.customName?.trim() || undefined,
+    weddingDate: i.weddingDate?.trim() || undefined,
+  }))
+}
+
+async function fetchQuote(items: CartItem[], couponCode: string): Promise<{ quote?: CartQuote; error?: string }> {
+  const res = await fetch('/api/enquiries/quote', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: toQuoteItems(items), couponCode: couponCode || undefined }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) return { error: typeof data?.error === 'string' ? data.error : 'Could not price your bag.' }
+  return { quote: data as CartQuote }
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('aval_cart')
-        if (stored) {
-          return JSON.parse(stored)
-        }
-      } catch {
-        // ignore
-      }
-    }
-    return []
-  })
-  const [couponCode, setCouponCode] = useState('')
-  const [couponDiscount, setCouponDiscount] = useState(0)
+  const { items, couponCode } = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false)
 
-  // Persist to localStorage
+  const [quote, setQuote] = useState<CartQuote | null>(null)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
+
+  // Re-price on the server whenever the bag or coupon changes (debounced)
   useEffect(() => {
-    try {
-      localStorage.setItem('aval_cart', JSON.stringify(items))
-    } catch {
-      // ignore
+    if (items.length === 0) return
+    let cancelled = false
+    const t = setTimeout(() => {
+      setQuoteLoading(true)
+      fetchQuote(items, couponCode)
+        .then((r) => {
+          if (cancelled) return
+          setQuote(r.quote ?? null)
+          setQuoteError(r.error ?? null)
+        })
+        .catch(() => {
+          if (!cancelled) setQuoteError('Could not reach the server to price your bag.')
+        })
+        .finally(() => {
+          if (!cancelled) setQuoteLoading(false)
+        })
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
     }
-  }, [items])
+  }, [items, couponCode])
 
-  const addItem = (
-    product: Product,
-    size: string,
-    customName?: string,
-    weddingDate?: string,
-    quantity: number = 1
-  ) => {
+  const addItem = (product: Product, size: string, customName?: string, weddingDate?: string, quantity = 1) => {
     const customExtra = customName && customName.trim() ? 200 : 0
     const unitPrice = product.salePrice + customExtra
     const itemId = `${product.id}-${size}-${customName || ''}-${weddingDate || ''}`
-
-    setItems((prev) => {
-      const existing = prev.find((item) => item.id === itemId)
-      if (existing) {
-        return prev.map((item) =>
-          item.id === itemId ? { ...item, quantity: item.quantity + quantity } : item
-        )
-      }
-      return [
-        ...prev,
-        {
-          id: itemId,
-          product,
-          size,
-          customName,
-          weddingDate,
-          quantity,
-          price: unitPrice,
-        },
-      ]
+    setState((prev) => {
+      const existing = prev.items.find((i) => i.id === itemId)
+      const next = existing
+        ? prev.items.map((i) => (i.id === itemId ? { ...i, quantity: i.quantity + quantity } : i))
+        : [...prev.items, { id: itemId, product, size, customName, weddingDate, quantity, price: unitPrice }]
+      return { ...prev, items: next }
     })
   }
 
-  const removeItem = (itemId: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== itemId))
-  }
+  const removeItem = (itemId: string) =>
+    setState((prev) => ({ ...prev, items: prev.items.filter((i) => i.id !== itemId) }))
 
   const updateQuantity = (itemId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeItem(itemId)
-      return
-    }
-    setItems((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, quantity } : item))
-    )
+    if (quantity <= 0) return removeItem(itemId)
+    setState((prev) => ({ ...prev, items: prev.items.map((i) => (i.id === itemId ? { ...i, quantity } : i)) }))
   }
 
   const clearCart = () => {
-    setItems([])
-    setCouponCode('')
-    setCouponDiscount(0)
+    setState(() => ({ items: [], couponCode: '' }))
+    setQuote(null)
+    setQuoteError(null)
   }
 
-  const applyCoupon = (code: string) => {
+  const applyCoupon = async (code: string) => {
     const trimmed = code.trim().toUpperCase()
-    if (trimmed === 'AVALWEDDING' || trimmed === 'BRIDAL10') {
-      setCouponDiscount(300)
-      setCouponCode(trimmed)
-      return true
-    } else if (trimmed === 'FIRST500') {
-      setCouponDiscount(500)
-      setCouponCode(trimmed)
-      return true
+    if (!trimmed) return { ok: false, message: 'Enter a coupon code.' }
+    if (items.length === 0) {
+      // Nothing to price yet — remember it and validate once items are added
+      setState((prev) => ({ ...prev, couponCode: trimmed }))
+      return { ok: true, message: `Coupon ${trimmed} saved. It will be checked when you add items.` }
     }
-    return false
+    try {
+      const r = await fetchQuote(items, trimmed)
+      if (r.error) return { ok: false, message: r.error }
+      if (r.quote?.couponError) return { ok: false, message: r.quote.couponError }
+      setState((prev) => ({ ...prev, couponCode: trimmed }))
+      setQuote(r.quote ?? null)
+      return { ok: true, message: `Coupon ${trimmed} applied.` }
+    } catch {
+      return { ok: false, message: 'Could not check the coupon. Please try again.' }
+    }
   }
 
-  const itemCount = items.reduce((acc, item) => acc + item.quantity, 0)
-  const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0)
-  const discount = couponDiscount
-  const shipping = subtotal > 1499 || subtotal === 0 ? 0 : 99
-  const total = Math.max(0, subtotal - discount + shipping)
+  const removeCoupon = () => setState((prev) => ({ ...prev, couponCode: '' }))
+
+  const itemCount = items.reduce((acc, i) => acc + i.quantity, 0)
+  const estimate = items.reduce((acc, i) => acc + i.price * i.quantity, 0)
+  const live = items.length > 0 ? quote : null
 
   return (
     <CartContext.Provider
       value={{
         items,
+        hydrated,
         addItem,
         removeItem,
         updateQuantity,
         clearCart,
         itemCount,
-        subtotal,
-        discount,
-        shipping,
-        total,
+        subtotal: live ? live.subtotalPaise / 100 : estimate,
+        discount: live ? live.discountPaise / 100 : 0,
+        shipping: live ? live.shippingPaise / 100 : 0,
+        total: live ? live.totalPaise / 100 : estimate,
+        quote: live,
+        quoteError: items.length > 0 ? quoteError : null,
+        quoteLoading,
         couponCode,
-        setCouponCode,
         applyCoupon,
-        couponDiscount,
+        removeCoupon,
       }}
     >
       {children}

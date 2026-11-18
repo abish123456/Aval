@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useStoreContact } from '@/context/StoreContact'
 import { useState } from 'react'
 
 function fmt(n: number) {
@@ -27,7 +28,9 @@ interface TrackedOrder {
 }
 
 export default function TrackOrderPage() {
+  const store = useStoreContact()
   const [query, setQuery] = useState('')
+  const [contact, setContact] = useState('')
   const [foundOrder, setFoundOrder] = useState<TrackedOrder | null>(null)
   const [searched, setSearched] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -35,17 +38,21 @@ export default function TrackOrderPage() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!query.trim()) return
+    if (!query.trim() || !contact.trim()) {
+      setError('Enter your order reference and the phone number used on the order.')
+      return
+    }
     setIsLoading(true)
     setError('')
-    setSearched(true)
+    setSearched(false)
 
     try {
       const res = await fetch('/api/track-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim() }),
+        body: JSON.stringify({ query: query.trim(), contact: contact.trim() }),
       })
+      setSearched(true)
       const data = await res.json()
       if (res.ok && data.success) {
         if (data.redirect) {
@@ -79,19 +86,33 @@ export default function TrackOrderPage() {
             Track Your Bridal Delivery
           </h1>
           <p style={{ color: 'var(--tx2)', fontSize: '14px' }}>
-            Enter your AVAL order number (e.g. <code>AVL-9842</code>) or mobile number to see live status.
+            Enter your order reference (the code at the end of your private order link, or an AVL- number) and the phone number you ordered with.
           </p>
         </div>
 
         {/* Search form */}
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', marginBottom: '36px' }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '36px' }}>
+          <label htmlFor="track-ref" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Order reference</label>
           <input
+            id="track-ref"
             type="text"
             className="input"
-            placeholder="Order number (AVL-9842) or mobile..."
+            placeholder="Order reference or link"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={{ fontSize: '15px' }}
+            style={{ fontSize: '15px', flex: '1 1 200px', minWidth: 0 }}
+          />
+          <label htmlFor="track-contact" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Phone number or email used on the order</label>
+          <input
+            id="track-contact"
+            type="text"
+            inputMode="tel"
+            autoComplete="tel"
+            className="input"
+            placeholder="Phone number used on order"
+            value={contact}
+            onChange={(e) => setContact(e.target.value)}
+            style={{ fontSize: '15px', flex: '1 1 200px', minWidth: 0 }}
           />
           <button type="submit" disabled={isLoading} className="btn btn-primary" style={{ padding: '0 28px', whiteSpace: 'nowrap', opacity: isLoading ? 0.7 : 1 }}>
             {isLoading ? 'Searching...' : 'Track Order'}
@@ -207,13 +228,13 @@ export default function TrackOrderPage() {
         {searched && !foundOrder && (
           <div className="card" style={{ padding: '36px', textAlign: 'center', background: '#fff' }}>
             <p style={{ color: 'var(--pr)', fontWeight: 600, fontSize: '16px', marginBottom: '8px' }}>
-              No order found matching &ldquo;{query}&rdquo;
+              No order found with those details
             </p>
             <p style={{ color: 'var(--tx2)', fontSize: '13px', marginBottom: '20px' }}>
               Please check your confirmation email or SMS, or contact our Kanyakumari help desk on WhatsApp.
             </p>
             <a
-              href="https://wa.me/919840212345"
+              href={store.whatsappLink('Hi AVAL Store, I need help finding my order')}
               target="_blank"
               rel="noreferrer"
               className="btn btn-secondary"

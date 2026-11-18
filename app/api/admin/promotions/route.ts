@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { getSession } from '@/src/server/auth/session'
 import { requirePermission, AuthError } from '@/src/server/auth/rbac'
 import { ok, apiError } from '@/src/server/api/helpers'
+import { couponFields, checkCouponRules, toDate } from '@/src/server/coupons'
 
 // ---------------------------------------------------------------------------
-// GET /api/admin/promotions — List promotions & coupons
+// Coupons (the only kind of offer checkout applies today).
+// GET  /api/admin/promotions — list with real usage and discount given
+// POST /api/admin/promotions — create a coupon
 // ---------------------------------------------------------------------------
 
 export async function GET(): Promise<NextResponse> {
@@ -16,44 +18,43 @@ export async function GET(): Promise<NextResponse> {
     if (!session) throw new AuthError()
     requirePermission(session.role, 'promotions:read')
 
-    const [promotions, coupons] = await Promise.all([
-      prisma.promotion.findMany({
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.coupon.findMany({
-        orderBy: { createdAt: 'desc' },
-        include: {
-          _count: {
-            select: { redemptions: true },
-          },
-        },
+    const [coupons, usage] = await Promise.all([
+      prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } }),
+      prisma.enquiry.groupBy({
+        by: ['couponCode'],
+        where: { couponCode: { not: null }, status: { not: 'CANCELLED' } },
+        _count: { _all: true },
+        _sum: { discountPaise: true },
       }),
     ])
+    const byCode = new Map(usage.map((u) => [u.couponCode, u]))
 
-    return ok({ promotions, coupons })
+    return ok(
+      coupons.map((c) => ({
+        ...c,
+        used: byCode.get(c.code)?._count._all ?? 0,
+        discountGivenPaise: byCode.get(c.code)?._sum.discountPaise ?? 0,
+      }))
+    )
   } catch (error) {
     return apiError(error)
   }
 }
 
-// ---------------------------------------------------------------------------
-// POST /api/admin/promotions — Create promotion or coupon
-// ---------------------------------------------------------------------------
-
-const promoSchema = z.object({
-  kind: z.enum(['PROMOTION', 'COUPON']),
-  name: z.string().min(2),
-  type: z.enum(['PRODUCT', 'COMBO', 'QUANTITY_TIER', 'BUY_X_GET_Y', 'CART', 'COUPON', 'FLASH']).default('COUPON'),
-  discountType: z.enum(['PERCENT', 'FIXED', 'BUNDLE_PRICE']),
-  valueBp: z.number().int().positive(),
-  minSpendPaise: z.number().int().default(0),
-  usageLimit: z.number().int().nullable().optional(),
-  startsAt: z.string().nullable().optional(),
-  expiresAt: z.string().nullable().optional(),
-  code: z.string().optional(),
-  description: z.string().optional(),
-  combinesWithCoupon: z.boolean().default(false),
-  eligibleProductIds: z.array(z.string()).nullable().optional(),
+const createSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{3,20}$/, 'Use 3–20 letters or numbers for the code'),
+  ...couponFields,
+  description: couponFields.description.default(''),
+  minSpendPaise: couponFields.minSpendPaise.default(0),
+  usageLimit: couponFields.usageLimit.default(null),
+  perCustomerLimit: couponFields.perCustomerLimit.default(1),
+  startsAt: couponFields.startsAt.default(null),
+  expiresAt: couponFields.expiresAt.default(null),
+  active: couponFields.active.default(true),
 })
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -62,51 +63,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!session) throw new AuthError()
     requirePermission(session.role, 'promotions:write')
 
-    const body = promoSchema.parse(await req.json())
+    const body = createSchema.parse(await req.json())
+    const problem = checkCouponRules(body)
+    if (problem) return NextResponse.json({ success: false, error: problem }, { status: 422 })
 
-    if (body.kind === 'COUPON' || body.code) {
-      if (!body.code) {
-        return NextResponse.json({ success: false, error: 'Coupon code is required' }, { status: 400 })
-      }
-      const existing = await prisma.coupon.findUnique({ where: { code: body.code.toUpperCase() } })
-      if (existing) {
-        return NextResponse.json({ success: false, error: 'Coupon code already exists' }, { status: 409 })
-      }
-
-      const coupon = await prisma.coupon.create({
-        data: {
-          code: body.code.toUpperCase(),
-          description: body.description ?? body.name,
-          discountType: body.discountType,
-          valueBp: body.valueBp,
-          minSpendPaise: body.minSpendPaise,
-          usageLimit: body.usageLimit,
-          startsAt: body.startsAt ? new Date(body.startsAt) : null,
-          expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
-          combinesWithCart: body.combinesWithCoupon,
-          eligibleProductIds: body.eligibleProductIds ? (body.eligibleProductIds as Prisma.InputJsonValue) : Prisma.JsonNull,
-        },
-      })
-
-      return NextResponse.json({ success: true, data: coupon }, { status: 201 })
+    const existing = await prisma.coupon.findUnique({ where: { code: body.code }, select: { id: true } })
+    if (existing) {
+      return NextResponse.json({ success: false, error: `A coupon with code ${body.code} already exists` }, { status: 409 })
     }
 
-    const promotion = await prisma.promotion.create({
+    const coupon = await prisma.coupon.create({
       data: {
-        name: body.name,
-        type: body.type,
-        discountType: body.discountType,
-        valueBp: body.valueBp,
-        minSpendPaise: body.minSpendPaise,
-        usageLimit: body.usageLimit,
-        startsAt: body.startsAt ? new Date(body.startsAt) : null,
-        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
-        combinesWithCoupon: body.combinesWithCoupon,
-        eligibleProductIds: body.eligibleProductIds ? (body.eligibleProductIds as Prisma.InputJsonValue) : Prisma.JsonNull,
+        ...body,
+        startsAt: toDate(body.startsAt),
+        expiresAt: toDate(body.expiresAt),
       },
     })
+    await prisma.auditLog.create({
+      data: { actorId: session.userId, action: 'CREATE', entityType: 'Coupon', entityId: coupon.id },
+    })
 
-    return NextResponse.json({ success: true, data: promotion }, { status: 201 })
+    return NextResponse.json({ success: true, data: coupon }, { status: 201 })
   } catch (error) {
     return apiError(error)
   }

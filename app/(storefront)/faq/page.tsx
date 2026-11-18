@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useStoreContact } from '@/context/StoreContact'
 import { useState } from 'react'
 
 const FAQS = [
@@ -27,6 +28,7 @@ const FAQS = [
 ]
 
 export default function FAQPage() {
+  const store = useStoreContact()
   const [openIdx, setOpenIdx] = useState<number | null>(0)
 
   return (
@@ -88,7 +90,7 @@ export default function FAQPage() {
             Our bridal styling team in Kanyakumari is happy to assist you directly on WhatsApp.
           </p>
           <a
-            href="https://wa.me/919840212345"
+            href={store.whatsappLink()}
             target="_blank"
             rel="noreferrer"
             className="btn btn-primary"

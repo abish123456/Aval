@@ -1,96 +1,78 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { useState } from 'react'
+import { PageHeader, Notice, rupees, formatDate, useAdminData } from '../_components/ui'
+
+interface Customer {
+  id: string
+  name: string
+  phone: string
+  whatsapp: string
+  city: string
+  ordersCount: number
+  totalSpentPaise: number
+  lastOrderAt: string
+  lastToken: string
+}
 
 export default function AdminCustomersPage() {
-  const [customers, setCustomers] = useState([
-    {
-      id: 'cust-1',
-      name: 'Priya Sundaram',
-      email: 'priya.sundaram@gmail.com',
-      phone: '+91 98402 12345',
-      city: 'Kanyakumari',
-      ordersCount: 3,
-      totalSpent: 8490,
-      weddingDate: '18 Nov 2026',
-    },
-    {
-      id: 'cust-2',
-      name: 'Ananya Ramachandran',
-      email: 'ananya.rc@outlook.com',
-      phone: '+91 94431 88762',
-      city: 'Coimbatore',
-      ordersCount: 1,
-      totalSpent: 1579,
-      weddingDate: '02 Dec 2026',
-    },
-    {
-      id: 'cust-3',
-      name: 'Kavitha Natarajan',
-      email: 'kavitha.n@yahoo.com',
-      phone: '+91 97890 54321',
-      city: 'Chennai',
-      ordersCount: 2,
-      totalSpent: 5200,
-      weddingDate: '15 Jan 2027',
-    },
-  ])
+  const { data, error, loading } = useAdminData<Customer[]>('/api/admin/customers')
+  const [query, setQuery] = useState('')
 
-  useEffect(() => {
-    fetch('/api/admin/customers')
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          setCustomers(res.data)
-        }
-      })
-      .catch(() => {})
-  }, [])
+  const q = query.trim().toLowerCase()
+  const rows = (data ?? []).filter(
+    (c) => !q || c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.whatsapp.includes(q) || c.city.toLowerCase().includes(q)
+  )
 
   return (
     <div>
-      <div style={{ marginBottom: '28px' }}>
-        <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '30px', color: 'var(--dk)', margin: 0 }}>
-          Brides & Customers
-        </h1>
-        <p style={{ color: 'var(--tx2)', fontSize: '13px', marginTop: '4px' }}>
-          Registered clients, wedding dates, and custom orders history
-        </p>
+      <PageHeader title="Customers" subtitle="Everyone who has placed an order, grouped by WhatsApp number" />
+
+      <div style={{ marginBottom: '16px', maxWidth: '360px' }}>
+        <label htmlFor="customer-search" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Search customers</label>
+        <input id="customer-search" className="input" placeholder="Search name, phone or city" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
 
-      <div className="card" style={{ padding: '24px', background: '#fff', border: '1px solid #EBE4E0' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid var(--bd)', color: 'var(--tx2)' }}>
-              <th style={{ padding: '12px 14px' }}>Customer</th>
-              <th style={{ padding: '12px 14px' }}>Contact</th>
-              <th style={{ padding: '12px 14px' }}>City</th>
-              <th style={{ padding: '12px 14px' }}>Wedding Date</th>
-              <th style={{ padding: '12px 14px' }}>Total Orders</th>
-              <th style={{ padding: '12px 14px', textAlign: 'right' }}>Total Spent</th>
-            </tr>
-          </thead>
-          <tbody>
-            {customers.map((c) => (
-              <tr key={c.id} style={{ borderBottom: '1px solid #F0E8E6' }}>
-                <td style={{ padding: '14px', fontWeight: 600, color: 'var(--dk)' }}>{c.name}</td>
-                <td style={{ padding: '14px' }}>
-                  <div>{c.email}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--tx2)' }}>{c.phone}</div>
-                </td>
-                <td style={{ padding: '14px', color: 'var(--tx2)' }}>{c.city}</td>
-                <td style={{ padding: '14px', color: 'var(--pr)', fontWeight: 500 }}>
-                  💍 {c.weddingDate}
-                </td>
-                <td style={{ padding: '14px' }}>{c.ordersCount} orders</td>
-                <td style={{ padding: '14px', textAlign: 'right', fontWeight: 700, color: 'var(--dk)' }}>
-                  ₹{c.totalSpent.toLocaleString('en-IN')}
-                </td>
+      {error ? (
+        <Notice kind="error">{error}</Notice>
+      ) : loading ? (
+        <Notice>Loading customers…</Notice>
+      ) : rows.length === 0 ? (
+        <Notice>{data?.length ? 'No customers match your search.' : 'No customers yet. They appear here after their first order.'}</Notice>
+      ) : (
+        <div className="card" style={{ padding: '8px 16px', overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>City</th>
+                <th style={{ textAlign: 'right' }}>Orders</th>
+                <th style={{ textAlign: 'right' }}>Paid</th>
+                <th>Last order</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.id}>
+                  <td style={{ fontWeight: 600 }}>{c.name}</td>
+                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {c.phone}
+                    {c.whatsapp !== c.phone && <div style={{ fontSize: '12px', color: 'var(--tx2)' }}>WhatsApp {c.whatsapp}</div>}
+                  </td>
+                  <td>{c.city || '—'}</td>
+                  <td style={{ textAlign: 'right' }}>{c.ordersCount}</td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{rupees(c.totalSpentPaise)}</td>
+                  <td>
+                    <Link href={`/admin/enquiries?token=${c.lastToken}`}>{formatDate(c.lastOrderAt)}</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

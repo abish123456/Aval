@@ -1,20 +1,29 @@
 'use client'
 
 import Link from 'next/link'
+import { useStoreContact } from '@/context/StoreContact'
 import { useState, useEffect } from 'react'
 import { useCart } from '@/context/CartContext'
 
-const NAV_LINKS = [
-  { href: '/shop', label: 'Shop All' },
-  { href: '/category/bridal-bangles', label: 'Bridal Bangles' },
-  { href: '/category/hair-clips', label: 'Hair Accessories' },
-  { href: '/category/customised', label: 'Customised' },
-  { href: '/custom-order', label: 'Custom Order' },
-  { href: '/offers', label: 'Combo Deals' },
-  { href: '/track-order', label: 'Track Order' },
-]
+export interface NavCategory {
+  slug: string
+  name: string
+}
 
-export default function Header() {
+// Category links come from the database (see the storefront layout), so they
+// always point at collections that exist. Track Order lives in the header actions.
+function navLinks(categories: NavCategory[]) {
+  return [
+    { href: '/shop', label: 'Shop All' },
+    ...categories.slice(0, 3).map((c) => ({ href: `/category/${c.slug}`, label: c.name })),
+    { href: '/custom-order', label: 'Custom Order' },
+    { href: '/offers', label: 'Offers' },
+  ]
+}
+
+export default function Header({ categories = [] }: { categories?: NavCategory[] }) {
+  const NAV_LINKS = navLinks(categories)
+  const store = useStoreContact()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { itemCount } = useCart()
 
@@ -282,7 +291,7 @@ export default function Header() {
         {/* Drawer Footer with direct WhatsApp action */}
         <div style={{ padding: '16px 20px 24px', borderTop: '1px solid var(--bd)', background: '#fff' }}>
           <a
-            href="https://wa.me/919876543210?text=Hi%20AVAL%20Store%2C%20I%20would%20like%20to%20order%20bridal%20accessories"
+            href={store.whatsappLink('Hi AVAL Store, I would like to order bridal accessories')}
             target="_blank"
             rel="noopener noreferrer"
             style={{

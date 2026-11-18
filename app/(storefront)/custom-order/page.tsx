@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { useStoreContact } from '@/context/StoreContact'
 import { useState } from 'react'
 
 export default function CustomOrderPage() {
+  const store = useStoreContact()
   const [submitted, setSubmitted] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -305,7 +307,7 @@ export default function CustomOrderPage() {
               <div style={{ textAlign: 'center', marginTop: '12px' }}>
                 <span style={{ fontSize: '13px', color: 'var(--tx2)' }}>or connect instantly:</span>
                 <a
-                  href="https://wa.me/919840212345?text=Hello%20AVAL%20Store,%20I%20would%20like%20to%20customise%20a%20bridal%20bangle%20set"
+                  href={store.whatsappLink('Hello AVAL Store, I would like to customise a bridal bangle set')}
                   target="_blank"
                   rel="noreferrer"
                   style={{
@@ -319,7 +321,7 @@ export default function CustomOrderPage() {
                     fontSize: '13px',
                   }}
                 >
-                  💬 Chat on WhatsApp (+91 98402 12345)
+                  💬 Chat on WhatsApp ({store.displayPhone(store.whatsapp)})
                 </a>
               </div>
             </form>

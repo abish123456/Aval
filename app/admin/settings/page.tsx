@@ -1,200 +1,131 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
+import { PageHeader, Notice, useAdminData, useFlash, FlashMessage, adminRequest } from '../_components/ui'
+
+interface FormState {
+  storeName: string
+  contactEmail: string
+  whatsapp: string
+  phone: string
+  address: string
+  freeShipping: string
+  shippingFee: string
+}
+
+const labelStyle: React.CSSProperties = { fontSize: '13px', fontWeight: 600, color: 'var(--dk)', display: 'block', marginBottom: '6px' }
+
+/** Show stored digits as a plain 10-digit number for editing */
+const tenDigits = (v?: string) => (v ?? '').replace(/\D/g, '').slice(-10)
 
 export default function AdminSettingsPage() {
-  const [settings, setSettings] = useState({
-    storeName: 'AVAL Handcrafted Bridal Store',
-    contactEmail: 'contact@avalstore.com',
-    whatsappNumber: '+91 98402 12345',
-    workshopHubAddress: 'Beach Road, Cape Town Centre, Kanyakumari, Tamil Nadu 629702',
-    razorpayKeyId: 'rzp_live_AVAL98213894',
-    enableCOD: true,
-    codExtraFee: 50,
-    freeShippingThreshold: 1499,
-    standardShippingFee: 99,
-  })
-
-  const [saved, setSaved] = useState(false)
+  const { data, error, loading } = useAdminData<Record<string, string>>('/api/admin/settings')
+  const [form, setForm] = useState<FormState | null>(null)
   const [saving, setSaving] = useState(false)
+  const [flash, showFlash, clearFlash] = useFlash()
 
+  // Fill the form once the saved settings arrive (defaults match the storefront)
+  const loaded = data !== null
   useEffect(() => {
-    fetch('/api/admin/settings')
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success && res.data) {
-          const map = res.data
-          setSettings((prev) => ({
-            ...prev,
-            storeName: map['store_name'] || prev.storeName,
-            contactEmail: map['contact_email'] || prev.contactEmail,
-            whatsappNumber: map['whatsapp_number'] || prev.whatsappNumber,
-            workshopHubAddress: map['workshop_address'] || prev.workshopHubAddress,
-            freeShippingThreshold: map['free_shipping_threshold_paise']
-              ? Math.round(Number(map['free_shipping_threshold_paise']) / 100)
-              : prev.freeShippingThreshold,
-            standardShippingFee: map['shipping_flat_fee_paise']
-              ? Math.round(Number(map['shipping_flat_fee_paise']) / 100)
-              : prev.standardShippingFee,
-          }))
-        }
-      })
-      .catch(() => {})
-  }, [])
+    if (!loaded || form) return
+    const m = data ?? {}
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm({
+      storeName: m.store_name ?? 'AVAL Store',
+      contactEmail: m.contact_email ?? 'contact@avalstore.com',
+      whatsapp: tenDigits(m.whatsapp_number) || '9840212345',
+      phone: tenDigits(m.contact_phone),
+      address: m.workshop_address ?? '',
+      freeShipping: String(Math.round(Number(m.free_shipping_threshold_paise ?? 150000) / 100)),
+      shippingFee: String(Math.round(Number(m.shipping_flat_fee_paise ?? 9900) / 100)),
+    })
+  }, [loaded, data, form])
 
-  const handleSave = async (e: React.FormEvent) => {
+  async function save(e: React.FormEvent) {
     e.preventDefault()
-    setSaving(true)
-    try {
-      await fetch('/api/admin/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          store_name: settings.storeName,
-          contact_email: settings.contactEmail,
-          whatsapp_number: settings.whatsappNumber,
-          workshop_address: settings.workshopHubAddress,
-          free_shipping_threshold_paise: String(settings.freeShippingThreshold * 100),
-          shipping_flat_fee_paise: String(settings.standardShippingFee * 100),
-        }),
-      })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-    } catch {
-      // Local fallback
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-    } finally {
-      setSaving(false)
+    if (!form) return
+    const free = Number(form.freeShipping)
+    const fee = Number(form.shippingFee)
+    if (!Number.isFinite(free) || free < 0 || !Number.isFinite(fee) || fee < 0) {
+      return showFlash('error', 'Shipping amounts must be 0 or more.')
     }
+    setSaving(true)
+    const r = await adminRequest('/api/admin/settings', 'POST', {
+      store_name: form.storeName,
+      contact_email: form.contactEmail,
+      whatsapp_number: form.whatsapp,
+      contact_phone: form.phone,
+      workshop_address: form.address,
+      free_shipping_threshold_paise: Math.round(free * 100),
+      shipping_flat_fee_paise: Math.round(fee * 100),
+    })
+    setSaving(false)
+    if (!r.ok) return showFlash('error', r.error ?? 'Settings not saved.')
+    showFlash('ok', 'Settings saved. The store uses them right away.')
   }
 
+  if (error) return <Notice kind="error">{error}</Notice>
+  if (loading || !form) return <Notice>Loading settings…</Notice>
+
+  const set = <K extends keyof FormState>(k: K, v: string) => setForm({ ...form, [k]: v })
+
   return (
-    <div style={{ maxWidth: '800px' }}>
-      <div style={{ marginBottom: '28px' }}>
-        <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '30px', color: 'var(--dk)', margin: 0 }}>
-          Store Configuration & Settings
-        </h1>
-        <p style={{ color: 'var(--tx2)', fontSize: '13px', marginTop: '4px' }}>
-          Payment gateways, shipping calculations, and Kanyakumari workshop contact details
-        </p>
-      </div>
+    <div style={{ maxWidth: '760px' }}>
+      <PageHeader title="Settings" subtitle="Contact details and shipping rules used across the storefront and checkout." />
 
-      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* General Store Info */}
-        <div className="card" style={{ padding: '24px', background: '#fff', border: '1px solid #EBE4E0' }}>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', marginBottom: '16px' }}>
-            Brand & Workshop Profile
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <label className="input-label" style={{ fontSize: '13px' }}>
-              Store Brand Name
-              <input
-                type="text"
-                className="input"
-                value={settings.storeName}
-                onChange={(e) => setSettings({ ...settings, storeName: e.target.value })}
-              />
-            </label>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-              <label className="input-label" style={{ fontSize: '13px' }}>
-                Customer Support Email
-                <input
-                  type="email"
-                  className="input"
-                  value={settings.contactEmail}
-                  onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
-                />
-              </label>
-
-              <label className="input-label" style={{ fontSize: '13px' }}>
-                WhatsApp Bridal Support Line
-                <input
-                  type="text"
-                  className="input"
-                  value={settings.whatsappNumber}
-                  onChange={(e) => setSettings({ ...settings, whatsappNumber: e.target.value })}
-                />
-              </label>
-            </div>
-
-            <label className="input-label" style={{ fontSize: '13px' }}>
-              Workshop & Studio Address (Kanyakumari)
-              <input
-                type="text"
-                className="input"
-                value={settings.workshopHubAddress}
-                onChange={(e) => setSettings({ ...settings, workshopHubAddress: e.target.value })}
-              />
-            </label>
+      <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <section className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', margin: 0 }}>Store details</h2>
+          <div>
+            <label htmlFor="st-name" style={labelStyle}>Store name</label>
+            <input id="st-name" className="input" value={form.storeName} onChange={(e) => set('storeName', e.target.value)} required />
           </div>
-        </div>
-
-        {/* Payment Gateways */}
-        <div className="card" style={{ padding: '24px', background: '#fff', border: '1px solid #EBE4E0' }}>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', marginBottom: '16px' }}>
-            Payment Gateways
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <label className="input-label" style={{ fontSize: '13px' }}>
-              Razorpay Key ID (Live / Test)
-              <input
-                type="text"
-                className="input"
-                value={settings.razorpayKeyId}
-                onChange={(e) => setSettings({ ...settings, razorpayKeyId: e.target.value })}
-              />
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', cursor: 'pointer', marginTop: '6px' }}>
-              <input
-                type="checkbox"
-                checked={settings.enableCOD}
-                onChange={(e) => setSettings({ ...settings, enableCOD: e.target.checked })}
-              />
-              Enable Cash on Delivery (COD) for verified pin codes
-            </label>
-          </div>
-        </div>
-
-        {/* Shipping Rates */}
-        <div className="card" style={{ padding: '24px', background: '#fff', border: '1px solid #EBE4E0' }}>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', marginBottom: '16px' }}>
-            Shipping Rules
-          </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-            <label className="input-label" style={{ fontSize: '13px' }}>
-              Free Shipping Threshold (₹)
-              <input
-                type="number"
-                className="input"
-                value={settings.freeShippingThreshold}
-                onChange={(e) => setSettings({ ...settings, freeShippingThreshold: Number(e.target.value) })}
-              />
-            </label>
-
-            <label className="input-label" style={{ fontSize: '13px' }}>
-              Standard Shipping Fee (₹)
-              <input
-                type="number"
-                className="input"
-                value={settings.standardShippingFee}
-                onChange={(e) => setSettings({ ...settings, standardShippingFee: Number(e.target.value) })}
-              />
-            </label>
+            <div>
+              <label htmlFor="st-wa" style={labelStyle}>WhatsApp number</label>
+              <input id="st-wa" className="input" type="tel" inputMode="numeric" value={form.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} placeholder="9840212345" required />
+              <div style={{ fontSize: '12px', color: 'var(--tx2)', marginTop: '4px' }}>Every “Chat on WhatsApp” button in the store opens this number.</div>
+            </div>
+            <div>
+              <label htmlFor="st-phone" style={labelStyle}>Phone for calls (optional)</label>
+              <input id="st-phone" className="input" type="tel" inputMode="numeric" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="Same as WhatsApp" />
+            </div>
           </div>
-        </div>
+          <div>
+            <label htmlFor="st-email" style={labelStyle}>Contact email</label>
+            <input id="st-email" className="input" type="email" value={form.contactEmail} onChange={(e) => set('contactEmail', e.target.value)} required />
+          </div>
+          <div>
+            <label htmlFor="st-address" style={labelStyle}>Workshop address</label>
+            <textarea id="st-address" className="input" rows={2} value={form.address} onChange={(e) => set('address', e.target.value)} />
+          </div>
+        </section>
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="btn btn-primary"
-          style={{ height: '46px', fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          {saving ? 'Saving...' : saved ? '✓ Settings Saved to MySQL!' : 'Save Store Changes'}
+        <section className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', margin: 0 }}>Shipping</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+            <div>
+              <label htmlFor="st-free" style={labelStyle}>Free shipping from (₹)</label>
+              <input id="st-free" className="input" type="number" min="0" step="1" value={form.freeShipping} onChange={(e) => set('freeShipping', e.target.value)} />
+              <div style={{ fontSize: '12px', color: 'var(--tx2)', marginTop: '4px' }}>Order value after coupons. 0 = never free.</div>
+            </div>
+            <div>
+              <label htmlFor="st-fee" style={labelStyle}>Shipping fee below that (₹)</label>
+              <input id="st-fee" className="input" type="number" min="0" step="1" value={form.shippingFee} onChange={(e) => set('shippingFee', e.target.value)} />
+            </div>
+          </div>
+        </section>
+
+        <p style={{ fontSize: '12px', color: 'var(--tx2)', margin: 0 }}>
+          Razorpay keys are kept in the server’s environment settings for security and are not edited here.
+        </p>
+
+        <button type="submit" className="btn btn-primary" disabled={saving} style={{ alignSelf: 'flex-start', padding: '0 28px', height: '44px' }}>
+          {saving ? 'Saving…' : 'Save settings'}
         </button>
       </form>
+
+      <FlashMessage flash={flash} onClose={clearFlash} />
     </div>
   )
 }

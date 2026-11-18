@@ -5,6 +5,14 @@ import { prisma } from '@/lib/db'
 import { createSession, getSession, deleteSession } from '@/src/server/auth/session'
 import { ok, apiError } from '@/src/server/api/helpers'
 import { AuthError } from '@/src/server/auth/rbac'
+import { rateLimit, clientIp } from '@/src/server/api/rate-limit'
+
+function tooMany(seconds: number) {
+  return NextResponse.json(
+    { success: false, error: `Too many attempts. Please try again in ${Math.ceil(seconds / 60)} minutes.` },
+    { status: 429, headers: { 'Retry-After': String(seconds) } }
+  )
+}
 
 // ---------------------------------------------------------------------------
 // POST /api/auth/register
@@ -19,9 +27,12 @@ const registerSchema = z.object({
 
 export async function POST_register(req: NextRequest): Promise<NextResponse> {
   try {
-    const body = registerSchema.parse(await req.json())
+    const limit = rateLimit(`register:${clientIp(req)}`, 5, 60 * 60 * 1000)
+    if (!limit.ok) return tooMany(limit.retryAfterSeconds)
+    const parsed = registerSchema.parse(await req.json())
+    const body = { ...parsed, email: parsed.email.trim().toLowerCase() }
 
-    const existing = await prisma.user.findUnique({ where: { email: body.email } })
+    const existing = await prisma.user.findFirst({ where: { email: { equals: body.email, mode: 'insensitive' } } })
     if (existing) {
       return NextResponse.json({ success: false, error: 'An account with this email already exists' }, { status: 409 })
     }
@@ -57,9 +68,18 @@ const loginSchema = z.object({
 
 export async function POST_login(req: NextRequest): Promise<NextResponse> {
   try {
-    const body = loginSchema.parse(await req.json())
+    const parsed = loginSchema.safeParse(await req.json().catch(() => ({})))
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: 'Enter a valid email and password' }, { status: 400 })
+    }
+    const body = { ...parsed.data, email: parsed.data.email.trim().toLowerCase() }
 
-    const user = await prisma.user.findUnique({ where: { email: body.email } })
+    // 10 attempts per account and 30 per connection every 15 minutes
+    const byIp = rateLimit(`login:ip:${clientIp(req)}`, 30, 15 * 60 * 1000)
+    const byEmail = rateLimit(`login:email:${body.email}`, 10, 15 * 60 * 1000)
+    if (!byIp.ok || !byEmail.ok) return tooMany(Math.max(byIp.retryAfterSeconds, byEmail.retryAfterSeconds))
+
+    const user = await prisma.user.findFirst({ where: { email: { equals: body.email, mode: 'insensitive' } } })
 
     // Generic error — don't reveal which field is wrong
     const invalid = () =>

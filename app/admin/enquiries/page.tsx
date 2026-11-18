@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
+import { useFlash, FlashMessage, adminRequest, STATUS_LABEL } from '../_components/ui'
 
 type EnquiryStatus = 'ENQUIRY' | 'CONFIRMED' | 'MAKING' | 'DISPATCHED' | 'DELIVERED' | 'CANCELLED'
 
@@ -18,6 +19,11 @@ interface Enquiry {
   customerPhone: string
   customerWhatsapp: string
   totalPaise: number
+  subtotalPaise: number
+  discountPaise: number
+  shippingPaise: number
+  couponCode: string | null
+  adminNotes: string | null
   status: EnquiryStatus
   paymentStatus: 'PENDING' | 'PAID' | 'FAILED'
   trackingNumber: string | null
@@ -33,6 +39,8 @@ interface Enquiry {
     size: string
     qty: number
     unitPaise: number
+    customName?: string
+    weddingDate?: string
   }>
   rating: { stars: number } | null
   messages: Message[]
@@ -40,7 +48,24 @@ interface Enquiry {
 }
 
 function fmt(n: number) {
-  return '₹' + n.toLocaleString('en-IN')
+  return '₹' + n.toLocaleString('en-IN', Number.isInteger(n) ? undefined : { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+// What the admin can do next from each status (mirrors the server rules)
+const NEXT_STEPS: Record<EnquiryStatus, { to: EnquiryStatus; label: string; needsPaid?: boolean }[]> = {
+  ENQUIRY: [],
+  CONFIRMED: [{ to: 'MAKING', label: 'Start handcrafting', needsPaid: true }],
+  MAKING: [],
+  DISPATCHED: [{ to: 'DELIVERED', label: 'Mark delivered', needsPaid: true }],
+  DELIVERED: [],
+  CANCELLED: [],
+}
+const CANCELLABLE: EnquiryStatus[] = ['ENQUIRY', 'CONFIRMED', 'MAKING']
+
+/** wa.me needs the country code; numbers are stored as 10 digits */
+function whatsappLink(digits: string) {
+  const d = digits.replace(/\D/g, '')
+  return `https://wa.me/${d.length === 10 ? '91' + d : d}`
 }
 
 // Professional SVG Icons
@@ -96,6 +121,18 @@ function IconWhatsApp() {
   )
 }
 
+async function loadEnquiries(filter: string): Promise<Enquiry[] | null> {
+  try {
+    const url = filter === 'all' ? '/api/admin/enquiries' : `/api/admin/enquiries?status=${filter.toUpperCase()}`
+    const res = await fetch(url, { cache: 'no-store' })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.data?.enquiries ?? []
+  } catch {
+    return null
+  }
+}
+
 export default function AdminEnquiriesPage() {
   const [enquiries, setEnquiries] = useState<Enquiry[]>([])
   const [loading, setLoading] = useState(true)
@@ -104,37 +141,40 @@ export default function AdminEnquiriesPage() {
   const [tracking, setTracking] = useState('')
   const [adminReply, setAdminReply] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [flash, showFlash, clearFlash] = useFlash()
+  const [payMethod, setPayMethod] = useState<'UPI' | 'BANK_TRANSFER' | 'CASH'>('UPI')
+  const [payRef, setPayRef] = useState('')
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const [copied, setCopied] = useState(false)
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
-  const fetchEnquiries = async () => {
-    try {
-      const url =
-        filter === 'all'
-          ? '/api/admin/enquiries'
-          : `/api/admin/enquiries?status=${filter.toUpperCase()}`
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
-        const list: Enquiry[] = data.enquiries ?? []
-        setEnquiries(list)
-        setSelected((prev) => {
-          if (prev) {
-            const updated = list.find((e) => e.token === prev.token)
-            return updated ?? (list[0] ?? null)
-          }
-          return list[0] ?? null
-        })
+  function applyList(list: Enquiry[] | null) {
+    setLoading(false)
+    if (!list) return showFlash('error', 'Could not load orders. Check your connection and refresh.')
+    setEnquiries(list)
+    // Deep link from the dashboard: /admin/enquiries?token=…
+    const wanted = new URLSearchParams(window.location.search).get('token')
+    setSelected((prev) => {
+      const key = prev?.token ?? wanted
+      if (key) {
+        const match = list.find((e) => e.token === key)
+        if (match) return match
       }
-    } catch (err) {
-      console.error('[AdminEnquiries] fetch error', err)
-    } finally {
-      setLoading(false)
-    }
+      return list[0] ?? null
+    })
   }
 
+  const fetchEnquiries = () => loadEnquiries(filter).then(applyList)
+
   useEffect(() => {
-    setLoading(true)
-    fetchEnquiries()
+    let cancelled = false
+    loadEnquiries(filter).then((list) => {
+      if (!cancelled) applyList(list)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
 
   // Real-time chat streaming using SSE
@@ -171,62 +211,63 @@ export default function AdminEnquiriesPage() {
 
   async function updateStatus(token: string, status: EnquiryStatus) {
     setActionLoading(true)
-    try {
-      await fetch(`/api/admin/enquiries/${token}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      })
-      await fetchEnquiries()
-    } finally {
-      setActionLoading(false)
-    }
+    const r = await adminRequest(`/api/admin/enquiries/${token}/status`, 'PATCH', { status })
+    setActionLoading(false)
+    setConfirmCancel(false)
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not update the order.')
+    showFlash('ok', `Order marked ${STATUS_LABEL[status]?.toLowerCase() ?? status}.`)
+    await fetchEnquiries()
+  }
+
+  async function markPaid(token: string) {
+    setActionLoading(true)
+    const r = await adminRequest(`/api/admin/enquiries/${token}/payment`, 'PATCH', { method: payMethod, reference: payRef.trim() || undefined })
+    setActionLoading(false)
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not record the payment.')
+    setPayRef('')
+    showFlash('ok', 'Payment recorded. The order is confirmed.')
+    await fetchEnquiries()
   }
 
   async function addTracking(token: string) {
     if (!tracking.trim()) return
     setActionLoading(true)
-    try {
-      await fetch(`/api/admin/enquiries/${token}/tracking`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackingNumber: tracking.trim() }),
-      })
-      setTracking('')
-      await fetchEnquiries()
-    } finally {
-      setActionLoading(false)
-    }
+    const r = await adminRequest(`/api/admin/enquiries/${token}/tracking`, 'PATCH', { trackingNumber: tracking.trim() })
+    setActionLoading(false)
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not save the tracking number.')
+    setTracking('')
+    showFlash('ok', 'Tracking saved. The order is marked dispatched.')
+    await fetchEnquiries()
   }
 
   async function sendAdminMessage(token: string) {
     if (!adminReply.trim()) return
     const bodyText = adminReply.trim()
-    setAdminReply('')
     setActionLoading(true)
+    const r = await adminRequest<Message>(`/api/admin/enquiries/${token}/messages`, 'POST', { body: bodyText })
+    setActionLoading(false)
+    if (!r.ok || !r.data) return showFlash('error', r.error ?? 'Message not sent.')
+    setAdminReply('')
+    const newMsg = r.data
+    setSelected((prev) => {
+      if (!prev || prev.token !== token) return prev
+      if (prev.messages.some((m) => m.id === newMsg.id)) return prev
+      return { ...prev, messages: [...prev.messages, newMsg] }
+    })
+  }
+
+  async function copyLink(token: string) {
+    const url = `${window.location.origin}/o/${token}`
     try {
-      const res = await fetch(`/api/enquiries/${token}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senderType: 'ADMIN', body: bodyText }),
-      })
-      if (res.ok) {
-        const newMsg: Message = await res.json()
-        setSelected((prev) => {
-          if (!prev || prev.token !== token) return prev
-          if (prev.messages.some((m) => m.id === newMsg.id)) return prev
-          return {
-            ...prev,
-            messages: [...prev.messages, newMsg],
-          }
-        })
-      }
-    } finally {
-      setActionLoading(false)
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      showFlash('error', `Copy failed. The link is ${url}`)
     }
   }
 
-  const pendingPayment = enquiries.filter((e) => e.paymentStatus === 'PENDING' && e.status !== 'CANCELLED')
+  const pendingPayment = enquiries.filter((e) => e.paymentStatus !== 'PAID' && e.status !== 'CANCELLED')
   const inProduction = enquiries.filter((e) => ['CONFIRMED', 'MAKING'].includes(e.status) && e.paymentStatus === 'PAID')
   const dispatched = enquiries.filter((e) => e.status === 'DISPATCHED')
   const delivered = enquiries.filter((e) => e.status === 'DELIVERED')
@@ -279,7 +320,7 @@ export default function AdminEnquiriesPage() {
         {['all', 'enquiry', 'confirmed', 'making', 'dispatched', 'delivered', 'cancelled'].map((f) => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => { if (f !== filter) { setLoading(true); setFilter(f) } }}
             style={{
               padding: '6px 14px',
               borderRadius: '4px',
@@ -298,7 +339,7 @@ export default function AdminEnquiriesPage() {
       </div>
 
       {/* Master Detail Split */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', alignItems: 'flex-start' }}>
+      <div className="admin-two-col-grid">
         {/* Left: Orders Table */}
         <div className="card" style={{ padding: 0, background: '#fff', border: '1px solid var(--bd)', overflow: 'hidden' }}>
           {loading ? (
@@ -324,7 +365,7 @@ export default function AdminEnquiriesPage() {
                     return (
                       <tr
                         key={enq.id}
-                        onClick={() => setSelected(enq)}
+                        onClick={() => { setSelected(enq); setConfirmCancel(false); setTracking(''); setPayRef('') }}
                         style={{
                           borderBottom: '1px solid #f0e8e6',
                           background: isSelected ? 'var(--bl2)' : 'transparent',
@@ -361,16 +402,20 @@ export default function AdminEnquiriesPage() {
                               borderRadius: '4px',
                               display: 'inline-block',
                               background:
-                                enq.status === 'CONFIRMED'
+                                enq.status === 'CONFIRMED' || enq.status === 'DELIVERED'
                                   ? 'var(--ok-bg)'
+                                  : enq.status === 'CANCELLED'
+                                  ? 'var(--er-bg)'
                                   : enq.status === 'MAKING'
                                   ? 'var(--bl2)'
                                   : enq.status === 'DISPATCHED'
                                   ? '#dbeafe'
                                   : 'var(--wn-bg)',
                               color:
-                                enq.status === 'CONFIRMED'
+                                enq.status === 'CONFIRMED' || enq.status === 'DELIVERED'
                                   ? 'var(--ok)'
+                                  : enq.status === 'CANCELLED'
+                                  ? 'var(--er)'
                                   : enq.status === 'MAKING'
                                   ? 'var(--pr)'
                                   : enq.status === 'DISPATCHED'
@@ -378,8 +423,11 @@ export default function AdminEnquiriesPage() {
                                   : 'var(--wn)',
                             }}
                           >
-                            {enq.status}
+                            {STATUS_LABEL[enq.status] ?? enq.status}
                           </span>
+                          {enq.paymentStatus !== 'PAID' && enq.status !== 'CANCELLED' && (
+                            <div style={{ fontSize: '11px', color: 'var(--wn)', marginTop: '4px' }}>Unpaid</div>
+                          )}
                         </td>
                       </tr>
                     )
@@ -406,7 +454,7 @@ export default function AdminEnquiriesPage() {
                 </div>
 
                 <a
-                  href={`https://wa.me/${selected.customerWhatsapp}`}
+                  href={whatsappLink(selected.customerWhatsapp)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-secondary"
@@ -427,72 +475,168 @@ export default function AdminEnquiriesPage() {
                 </a>
               </div>
 
-              {/* Private Link */}
-              <div style={{ background: 'var(--bg)', padding: '12px 14px', borderRadius: '4px', marginBottom: '16px', fontSize: '12px' }}>
-                <span style={{ color: 'var(--tx2)', display: 'block', marginBottom: '4px' }}>Customer Private Link:</span>
-                <a
-                  href={`/o/${selected.token}`}
-                  target="_blank"
-                  style={{ color: 'var(--pr)', fontWeight: 600, fontFamily: 'monospace', textDecoration: 'underline' }}
-                >
-                  /o/{selected.token}
-                </a>
-              </div>
-
-              {/* Status Action Buttons */}
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--tx2)', marginBottom: '8px' }}>
-                  CHANGE STATUS:
+              {/* Order summary */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                  <span>
+                    Placed {new Date(selected.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                  <span className={`tag ${selected.paymentStatus === 'PAID' ? 'tag-ok' : 'tag-warning'}`}>
+                    {selected.paymentStatus === 'PAID' ? 'Paid' : 'Unpaid'}
+                  </span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {(['CONFIRMED', 'MAKING', 'DISPATCHED', 'DELIVERED'] as EnquiryStatus[]).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => updateStatus(selected.token, st)}
-                      disabled={actionLoading || selected.status === st}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--bd)',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        background: selected.status === st ? 'var(--pr)' : '#fff',
-                        color: selected.status === st ? '#fff' : 'var(--tx)',
-                      }}
-                    >
-                      {st}
-                    </button>
+
+                <div style={{ border: '1px solid var(--bd)', borderRadius: '4px' }}>
+                  {selected.items.map((it, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '10px 12px', borderBottom: i < selected.items.length - 1 ? '1px solid #f0e8e6' : 'none' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--dk)' }}>{it.productName.replace(/ \(Custom: .*\)$/, '')}</div>
+                        <div style={{ color: 'var(--tx2)', fontSize: '12px' }}>
+                          {it.size ? `Size ${it.size} · ` : ''}Qty {it.qty} × {fmt(it.unitPaise / 100)}
+                        </div>
+                        {it.customName && (
+                          <div style={{ fontSize: '12px', color: 'var(--pr)', marginTop: '2px' }}>
+                            Personalise: “{it.customName}”{it.weddingDate ? ` · ${it.weddingDate}` : ''}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt((it.unitPaise * it.qty) / 100)}</div>
+                    </div>
                   ))}
-                </div>
-              </div>
-
-              {/* Dispatch Tracking Input */}
-              {['CONFIRMED', 'MAKING'].includes(selected.status) && (
-                <div style={{ borderTop: '1px solid var(--bd)', paddingTop: '14px', marginTop: '14px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--dk)', display: 'block', marginBottom: '6px' }}>
-                    Enter Courier Tracking (BlueDart / IndiaPost / DTDC):
-                  </label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder="e.g. BD_987654321"
-                      value={tracking}
-                      onChange={(e) => setTracking(e.target.value)}
-                      style={{ flex: 1, height: '38px' }}
-                    />
-                    <button
-                      onClick={() => addTracking(selected.token)}
-                      disabled={actionLoading || !tracking.trim()}
-                      className="btn btn-primary"
-                      style={{ height: '38px', padding: '0 16px', fontSize: '12px', whiteSpace: 'nowrap' }}
-                    >
-                      Dispatch Order
-                    </button>
+                  <div style={{ padding: '10px 12px', background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>{fmt((selected.subtotalPaise || selected.totalPaise) / 100)}</span></div>
+                    {selected.discountPaise > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--ok)' }}><span>Coupon {selected.couponCode}</span><span>− {fmt(selected.discountPaise / 100)}</span></div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Shipping</span><span>{selected.shippingPaise > 0 ? fmt(selected.shippingPaise / 100) : 'Free'}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--pr)' }}><span>Total</span><span>{fmt(selected.totalPaise / 100)}</span></div>
                   </div>
                 </div>
-              )}
+
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--tx2)', marginBottom: '2px' }}>Ship to</div>
+                  <div style={{ lineHeight: 1.5 }}>
+                    {selected.customerName}<br />
+                    {selected.deliveryAddress.street}<br />
+                    {selected.deliveryAddress.city}, {selected.deliveryAddress.state} {selected.deliveryAddress.pincode}<br />
+                    Phone {selected.customerPhone}{selected.customerWhatsapp !== selected.customerPhone ? ` · WhatsApp ${selected.customerWhatsapp}` : ''}
+                  </div>
+                </div>
+
+                {selected.trackingNumber && (
+                  <div><span style={{ color: 'var(--tx2)' }}>Tracking:</span> <strong>{selected.trackingNumber}</strong></div>
+                )}
+
+                {selected.adminNotes && (
+                  <div role={selected.adminNotes.includes('REFUND REQUIRED') ? 'alert' : undefined} style={{ whiteSpace: 'pre-line', background: selected.adminNotes.includes('REFUND REQUIRED') ? 'var(--er-bg)' : 'var(--bg)', color: selected.adminNotes.includes('REFUND REQUIRED') ? 'var(--er)' : 'var(--tx)', padding: '8px 10px', borderRadius: '4px', fontSize: '12px' }}>
+                    {selected.adminNotes}
+                  </div>
+                )}
+              </div>
+
+              {/* Private Link */}
+              <div style={{ background: 'var(--bg)', padding: '12px 14px', borderRadius: '4px', marginBottom: '16px', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  <span style={{ color: 'var(--tx2)', display: 'block', marginBottom: '4px' }}>Customer&apos;s private order link</span>
+                  <a href={`/o/${selected.token}`} target="_blank" style={{ color: 'var(--pr)', fontWeight: 600, fontFamily: 'monospace', textDecoration: 'underline', overflowWrap: 'anywhere' }}>
+                    /o/{selected.token}
+                  </a>
+                </div>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => copyLink(selected.token)}>
+                  {copied ? 'Copied' : 'Copy full link'}
+                </button>
+              </div>
+
+              {/* Next actions */}
+              <div style={{ borderTop: '1px solid var(--bd)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--tx2)' }}>
+                  STATUS: <span style={{ color: 'var(--dk)' }}>{STATUS_LABEL[selected.status] ?? selected.status}</span>
+                </div>
+
+                {selected.paymentStatus !== 'PAID' && selected.status !== 'CANCELLED' && (
+                  <form onSubmit={(e) => { e.preventDefault(); markPaid(selected.token) }} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label htmlFor="pay-method" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--dk)' }}>
+                      Received payment outside Razorpay? Record it to confirm the order:
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <select id="pay-method" className="input" value={payMethod} onChange={(e) => setPayMethod(e.target.value as typeof payMethod)} style={{ width: 'auto', height: '38px' }}>
+                        <option value="UPI">UPI</option>
+                        <option value="BANK_TRANSFER">Bank transfer</option>
+                        <option value="CASH">Cash</option>
+                      </select>
+                      <label htmlFor="pay-ref" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Payment reference</label>
+                      <input id="pay-ref" className="input" placeholder="UTR / reference (optional)" value={payRef} onChange={(e) => setPayRef(e.target.value)} style={{ flex: '1 1 160px', minWidth: 0, height: '38px' }} />
+                      <button type="submit" className="btn btn-primary" disabled={actionLoading} style={{ height: '38px', padding: '0 14px', fontSize: '12px' }}>
+                        Mark as paid · {fmt(selected.totalPaise / 100)}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {NEXT_STEPS[selected.status].length > 0 && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {NEXT_STEPS[selected.status].map((step) => (
+                      <button
+                        key={step.to}
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={actionLoading || (step.needsPaid && selected.paymentStatus !== 'PAID')}
+                        title={step.needsPaid && selected.paymentStatus !== 'PAID' ? 'Record the payment first' : undefined}
+                        onClick={() => updateStatus(selected.token, step.to)}
+                      >
+                        {step.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {(selected.status === 'MAKING' || selected.status === 'DISPATCHED') && (
+                  <div>
+                    <label htmlFor="tracking-no" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--dk)', display: 'block', marginBottom: '6px' }}>
+                      {selected.status === 'MAKING' ? 'Courier tracking number (marks the order dispatched)' : 'Correct the tracking number'}
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <input
+                        id="tracking-no"
+                        type="text"
+                        className="input"
+                        placeholder={selected.trackingNumber ?? 'e.g. BD987654321'}
+                        value={tracking}
+                        onChange={(e) => setTracking(e.target.value)}
+                        style={{ flex: '1 1 160px', minWidth: 0, height: '38px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addTracking(selected.token)}
+                        disabled={actionLoading || !tracking.trim()}
+                        className="btn btn-primary"
+                        style={{ height: '38px', padding: '0 16px', fontSize: '12px', whiteSpace: 'nowrap' }}
+                      >
+                        {selected.status === 'MAKING' ? 'Save & dispatch' : 'Update tracking'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {CANCELLABLE.includes(selected.status) && (
+                  confirmCancel ? (
+                    <div role="alert" style={{ background: 'var(--er-bg)', padding: '10px 12px', borderRadius: '4px', fontSize: '13px', color: 'var(--er)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <span>
+                        Cancel this order? Its stock goes back on sale.
+                        {selected.paymentStatus === 'PAID' ? ' It is paid, so it will be flagged for a refund.' : ''}
+                      </span>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={actionLoading} onClick={() => updateStatus(selected.token, 'CANCELLED')}>Yes, cancel order</button>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => setConfirmCancel(false)}>Keep order</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmCancel(true)} style={{ alignSelf: 'flex-start', background: 'none', border: 0, color: 'var(--er)', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px', padding: 0 }}>
+                      Cancel order
+                    </button>
+                  )
+                )}
+              </div>
             </div>
 
             {/* In-Link Live Chat Box */}
@@ -566,6 +710,7 @@ export default function AdminEnquiriesPage() {
           </div>
         )}
       </div>
+      <FlashMessage flash={flash} onClose={clearFlash} />
     </div>
   )
 }

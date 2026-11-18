@@ -29,13 +29,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { description: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
       ]
     }
 
     if (featured) {
-      where.OR = [{ isBestSeller: true }, { isNew: true }]
+      // AND with any search filter instead of overwriting it
+      where.AND = [{ OR: [{ isBestSeller: true }, { isNew: true }] }]
     }
 
     // Build orderBy

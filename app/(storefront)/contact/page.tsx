@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { useStoreContact } from '@/context/StoreContact'
 import { useState } from 'react'
 
 export default function ContactPage() {
+  const store = useStoreContact()
   const [sent, setSent] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' })
 
@@ -49,12 +51,12 @@ export default function ContactPage() {
                 WhatsApp Bridal Support
               </h4>
               <a
-                href="https://wa.me/919840212345"
+                href={store.whatsappLink()}
                 target="_blank"
                 rel="noreferrer"
                 style={{ color: '#128C7E', fontWeight: 600, fontSize: '14px', textDecoration: 'none' }}
               >
-                💬 +91 98402 12345
+                💬 {store.displayPhone(store.whatsapp)}
               </a>
               <div style={{ fontSize: '12px', color: 'var(--tx2)', marginTop: '2px' }}>
                 Mon – Sat: 9:30 AM to 8:00 PM IST
@@ -65,7 +67,7 @@ export default function ContactPage() {
               <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--dk)', marginBottom: '4px' }}>
                 Email Inquiries
               </h4>
-              <div style={{ fontSize: '14px', color: 'var(--tx)' }}>contact@avalstore.com</div>
+              <div style={{ fontSize: '14px', color: 'var(--tx)' }}>{store.email}</div>
               <div style={{ fontSize: '12px', color: 'var(--tx2)', marginTop: '2px' }}>
                 We reply to all emails within 12 hours.
               </div>

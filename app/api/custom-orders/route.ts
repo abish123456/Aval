@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db'
 import { getSession } from '@/src/server/auth/session'
 import { requirePermission, AuthError } from '@/src/server/auth/rbac'
 import { ok, apiError } from '@/src/server/api/helpers'
+import { escapeHtml } from '@/src/server/api/html'
+import { rateLimit, clientIp } from '@/src/server/api/rate-limit'
 
 // ---------------------------------------------------------------------------
 // POST /api/custom-orders — Public submission
@@ -12,15 +14,22 @@ import { ok, apiError } from '@/src/server/api/helpers'
 const customOrderSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
-  phone: z.string().min(10),
-  description: z.string().min(10),
-  budget: z.string().optional(),
-  weddingDate: z.string().optional(),
-  occasion: z.string().optional(),
+  phone: z.string().min(10).max(20),
+  description: z.string().min(10).max(3000),
+  budget: z.string().max(100).optional(),
+  weddingDate: z.string().max(40).optional(),
+  occasion: z.string().max(100).optional(),
 })
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    const limit = rateLimit(`custom-order:${clientIp(req)}`, 5, 60 * 60 * 1000)
+    if (!limit.ok) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+      )
+    }
     const session = await getSession()
     const body = customOrderSchema.parse(await req.json())
 
@@ -38,12 +47,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         {
           to: body.email,
           subject: 'Your custom bridal order request — AVAL Store',
-          htmlBody: `<p>Dear ${body.name},</p><p>Thank you for your custom bridal accessory request! Our artisans in Kanyakumari will review your request and send you a personalised quote within 2–3 business days.</p><p><strong>Your Request ID:</strong> ${customOrder.id}</p><p>With warmth,<br/>The AVAL Team</p>`,
+          htmlBody: `<p>Dear ${escapeHtml(body.name)},</p><p>Thank you for your custom bridal accessory request! Our artisans in Kanyakumari will review your request and send you a personalised quote within 2–3 business days.</p><p><strong>Your Request ID:</strong> ${customOrder.id}</p><p>With warmth,<br/>The AVAL Team</p>`,
         },
         {
           to: process.env.EMAIL_FROM ?? 'hello@avalstore.in',
-          subject: `New custom order request from ${body.name}`,
-          htmlBody: `<p>New custom order request received:</p><p><strong>Name:</strong> ${body.name}<br/><strong>Email:</strong> ${body.email}<br/><strong>Phone:</strong> ${body.phone}<br/><strong>Description:</strong> ${body.description}<br/><strong>Budget:</strong> ${body.budget ?? 'Not specified'}<br/><strong>Wedding Date:</strong> ${body.weddingDate ?? 'Not specified'}</p>`,
+          subject: `New custom order request from ${body.name.replace(/[\r\n]+/g, ' ')}`,
+          htmlBody: `<p>New custom order request received:</p><p><strong>Name:</strong> ${escapeHtml(body.name)}<br/><strong>Email:</strong> ${escapeHtml(body.email)}<br/><strong>Phone:</strong> ${escapeHtml(body.phone)}<br/><strong>Description:</strong> ${escapeHtml(body.description)}<br/><strong>Budget:</strong> ${escapeHtml(body.budget ?? 'Not specified')}<br/><strong>Wedding Date:</strong> ${escapeHtml(body.weddingDate ?? 'Not specified')}</p>`,
         },
       ],
     })

@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,7 @@ enum TaxMode {
   INCLUSIVE
   EXCLUSIVE
 }
+
 enum EnquiryStatus {
   ENQUIRY
   CONFIRMED
@@ -159,7 +161,7 @@ model Address {
   label     String   @default("Home") // Home / Work / Other
   name      String
   phone     String
-  street    String   @db.Text
+  street    String
   city      String
   state     String
   pincode   String   @db.VarChar(10)
@@ -180,8 +182,8 @@ model Category {
   id          String   @id @default(cuid())
   name        String
   slug        String   @unique
-  image       String   @db.Text
-  description String   @db.Text
+  image       String
+  description String
   archived    Boolean  @default(false)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
@@ -206,7 +208,7 @@ model Product {
   isNew            Boolean  @default(false)
   rating           Float    @default(0)
   reviewCount      Int      @default(0)
-  description      String   @db.Text
+  description      String
   details          Json     // String[]
   images           Json     // String[]
   sizes            Json     // String[]
@@ -223,7 +225,7 @@ model Product {
   @@index([categoryId])
   @@index([slug])
   @@index([archived])
-  @@fulltext([name, description])
+  // Note: @@fulltext removed — not supported in PostgreSQL (use pg_trgm or Supabase full-text search if needed)
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +248,7 @@ model Order {
   taxPaise         Int              @default(0)
   totalPaise       Int
   couponCode       String?
-  notes            String?          @db.Text
+  notes            String?
   idempotencyKey   String?          @unique
   source           String           @default("WEB") // WEB | COD | CUSTOM_QUOTE | ADMIN
   createdAt        DateTime         @default(now())
@@ -276,7 +278,7 @@ model OrderItem {
   unitPricePaise Int
   lineTotalPaise Int
   size          String?
-  customisation String? @db.Text
+  customisation String?
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
@@ -303,7 +305,7 @@ model OrderStatusEvent {
   fromStatus String?
   toStatus   String
   actorId    String?
-  note       String?  @db.Text
+  note       String?
   createdAt  DateTime @default(now())
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -340,7 +342,7 @@ model Refund {
   providerRefundId  String?      @unique
   amountPaise       Int
   status            RefundStatus @default(PENDING)
-  reason            String?      @db.Text
+  reason            String?
   idempotencyKey    String?      @unique
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
@@ -422,7 +424,7 @@ model CustomOrder {
   name           String
   email          String
   phone          String
-  description    String            @db.Text
+  description    String
   budget         String?
   weddingDate    String?
   occasion       String?
@@ -431,7 +433,7 @@ model CustomOrder {
   assignedToId   String?
   quoteToken     String?           @unique
   quotePricePaise Int?
-  quoteNote      String?           @db.Text
+  quoteNote      String?
   quoteSentAt    DateTime?
   quoteExpiresAt DateTime?
   acceptedAt     DateTime?
@@ -459,10 +461,10 @@ model Review {
   userId          String?
   guestName       String?
   rating          Int      // 1–5
-  body            String   @db.Text
+  body            String
   verifiedPurchase Boolean @default(false)
   visible         Boolean  @default(false) // requires admin approval
-  artisanReply    String?  @db.Text
+  artisanReply    String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -516,7 +518,7 @@ model InventoryMovement {
 
 model Setting {
   key       String   @id
-  value     String   @db.Text
+  value     String
   updatedAt DateTime @updatedAt
 }
 
@@ -545,11 +547,11 @@ model EmailOutbox {
   id          String    @id @default(cuid())
   to          String
   subject     String
-  htmlBody    String    @db.LongText
+  htmlBody    String
   attempts    Int       @default(0)
   maxAttempts Int       @default(3)
   sentAt      DateTime?
-  lastError   String?   @db.Text
+  lastError   String?
   createdAt   DateTime  @default(now())
 
   @@index([sentAt])
@@ -570,13 +572,18 @@ model Enquiry {
   customerWhatsapp    String               @db.VarChar(15)
   deliveryAddress     Json
   items               Json
-  totalPaise          Int
+  subtotalPaise       Int                  @default(0) // sum of line totals, before discount
+  couponCode          String?              @db.VarChar(40)
+  discountPaise       Int                  @default(0)
+  shippingPaise       Int                  @default(0)
+  totalPaise          Int                  // subtotal − discount + shipping
+  stockReleased       Boolean              @default(false) // set when a cancellation returns stock
   status              EnquiryStatus        @default(ENQUIRY)
   paymentStatus       EnquiryPaymentStatus @default(PENDING)
   razorpayOrderId     String?              @db.VarChar(64)
   razorpayPaymentId   String?              @db.VarChar(64)
   trackingNumber      String?              @db.VarChar(64)
-  adminNotes          String?              @db.Text
+  adminNotes          String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -586,13 +593,14 @@ model Enquiry {
   @@index([token])
   @@index([status])
   @@index([createdAt])
+  @@index([couponCode])
 }
 
 model EnquiryMessage {
   id          String   @id @default(cuid())
   enquiryId   String
   senderType  String   @db.VarChar(10) // CUSTOMER | ADMIN
-  body        String   @db.Text
+  body        String
   createdAt   DateTime @default(now())
 
   enquiry Enquiry @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
@@ -604,7 +612,7 @@ model EnquiryRating {
   id        String   @id @default(cuid())
   enquiryId String   @unique
   stars     Int
-  comment   String?  @db.Text
+  comment   String?
   createdAt DateTime @default(now())
 
   enquiry Enquiry @relation(fields: [enquiryId], references: [id], onDelete: Cascade)

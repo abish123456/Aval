@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
+import { Prisma } from '@prisma/client'
 import {
   AuthError,
   PermissionError,
@@ -32,8 +33,9 @@ export function apiError(error: unknown): NextResponse {
   console.error('[API Error]', error)
 
   if (error instanceof ZodError) {
+    // First issue as a readable message; full list for forms that map fields
     return NextResponse.json(
-      { success: false, error: 'Validation failed', issues: error.issues },
+      { success: false, error: error.issues[0]?.message ?? 'Please check the form', issues: error.issues },
       { status: 422 }
     )
   }
@@ -62,6 +64,19 @@ export function apiError(error: unknown): NextResponse {
       { success: false, error: error.message, code: error.code },
       { status: 409 }
     )
+  }
+
+  // Common database errors → clear messages instead of a bare 500
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2002') {
+      return NextResponse.json({ success: false, error: 'Something with that name or code already exists.' }, { status: 409 })
+    }
+    if (error.code === 'P2003') {
+      return NextResponse.json({ success: false, error: 'This is still used by other records, so it can’t be removed.' }, { status: 409 })
+    }
+    if (error.code === 'P2025') {
+      return NextResponse.json({ success: false, error: 'Not found. It may have been removed already.' }, { status: 404 })
+    }
   }
 
   // Unknown error — don't leak details in production

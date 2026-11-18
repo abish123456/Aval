@@ -1,638 +1,278 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
+import { PageHeader, Notice, useAdminData, useFlash, FlashMessage, adminRequest, rupees, formatDate } from '../_components/ui'
 
-interface Promotion {
-  id: number
-  name: string
-  type: 'combo' | 'coupon' | 'cart' | 'flash' | 'quantity' | 'product'
-  discountType: 'percent' | 'fixed' | 'bundle'
-  discountValue: number
-  startDate: string
-  endDate: string
-  redemptions: number
-  discountGiven: number
-  status: 'active' | 'scheduled' | 'expired'
-  code?: string
-  combinesCoupons: boolean
-  usageLimit: number
-  eligibleProducts: string
+interface Coupon {
+  id: string
+  code: string
+  description: string | null
+  discountType: 'PERCENT' | 'FIXED' | 'BUNDLE_PRICE'
+  valueBp: number
+  minSpendPaise: number
+  usageLimit: number | null
+  perCustomerLimit: number
+  startsAt: string | null
+  expiresAt: string | null
+  active: boolean
+  used: number
+  discountGivenPaise: number
 }
 
-const INITIAL_PROMOTIONS: Promotion[] = [
-  {
-    id: 1,
-    name: 'WED10 — Wedding Season Coupon',
-    type: 'coupon',
-    discountType: 'percent',
-    discountValue: 10,
-    startDate: '2026-09-01T00:00',
-    endDate: '2026-12-31T23:59',
-    redemptions: 47,
-    discountGiven: 12400,
-    status: 'active',
-    code: 'WED10',
-    combinesCoupons: false,
-    usageLimit: 200,
-    eligibleProducts: 'All products',
-  },
-  {
-    id: 2,
-    name: 'AVALBRIDE — Bridal Bundle Offer',
-    type: 'coupon',
-    discountType: 'percent',
-    discountValue: 15,
-    startDate: '2026-10-01T00:00',
-    endDate: '2026-12-31T23:59',
-    redemptions: 22,
-    discountGiven: 8900,
-    status: 'active',
-    code: 'AVALBRIDE',
-    combinesCoupons: false,
-    usageLimit: 100,
-    eligibleProducts: 'Bridal Sets, Bangles',
-  },
-  {
-    id: 3,
-    name: 'Kundan + Pearl Combo Deal',
-    type: 'combo',
-    discountType: 'percent',
-    discountValue: 12,
-    startDate: '2026-10-15T00:00',
-    endDate: '2026-11-15T23:59',
-    redemptions: 9,
-    discountGiven: 3200,
-    status: 'active',
-    code: '',
-    combinesCoupons: true,
-    usageLimit: 50,
-    eligibleProducts: 'Kundan Bridal Bangle Set, Pearl Hair Clip',
-  },
-  {
-    id: 4,
-    name: 'Diwali Flash Sale',
-    type: 'flash',
-    discountType: 'percent',
-    discountValue: 20,
-    startDate: '2026-11-01T10:00',
-    endDate: '2026-11-02T22:00',
-    redemptions: 0,
-    discountGiven: 0,
-    status: 'scheduled',
-    code: '',
-    combinesCoupons: false,
-    usageLimit: 30,
-    eligibleProducts: 'All products',
-  },
-  {
-    id: 5,
-    name: 'Independence Day Sale',
-    type: 'product',
-    discountType: 'percent',
-    discountValue: 15,
-    startDate: '2026-08-14T00:00',
-    endDate: '2026-08-15T23:59',
-    redemptions: 18,
-    discountGiven: 4800,
-    status: 'expired',
-    code: '',
-    combinesCoupons: false,
-    usageLimit: 100,
-    eligibleProducts: 'All products',
-  },
-]
-
-const FILTER_TABS = ['All', 'Product Offers', 'Combo Deals', 'Coupons', 'Cart Discounts', 'Flash Sales', 'Expired']
-
-const STATUS_TAG: Record<string, string> = {
-  active: 'tag tag-ok',
-  scheduled: 'tag tag-warning',
-  expired: 'tag',
+interface FormState {
+  id?: string
+  code: string
+  description: string
+  discountType: 'PERCENT' | 'FIXED'
+  value: string
+  minSpend: string
+  limited: boolean
+  usageLimit: string
+  perCustomerLimit: string
+  startsAt: string
+  expiresAt: string
+  active: boolean
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  combo: 'Combo Deal',
-  coupon: 'Coupon',
-  cart: 'Cart Discount',
-  flash: 'Flash Sale',
-  quantity: 'Quantity Discount',
-  product: 'Product Offer',
+const EMPTY: FormState = {
+  code: '',
+  description: '',
+  discountType: 'PERCENT',
+  value: '10',
+  minSpend: '0',
+  limited: false,
+  usageLimit: '100',
+  perCustomerLimit: '1',
+  startsAt: '',
+  expiresAt: '',
+  active: true,
 }
 
-export default function AdminPromotionsPage() {
-  const [promotions, setPromotions] = useState<Promotion[]>(INITIAL_PROMOTIONS)
-  const [activeTab, setActiveTab] = useState('All')
-  const [showBuilder, setShowBuilder] = useState(false)
-  const [toast, setToast] = useState('')
+const labelStyle: React.CSSProperties = { fontSize: '12px', fontWeight: 600, color: 'var(--dk)', display: 'block', marginBottom: '6px' }
 
-  // Builder form state
-  const [form, setForm] = useState({
-    name: '',
-    type: 'coupon' as Promotion['type'],
-    discountType: 'percent' as Promotion['discountType'],
-    discountValue: 10,
-    startDate: '',
-    endDate: '',
-    code: '',
-    usageLimit: 100,
-    eligibleProducts: '',
-    combinesCoupons: false,
-  })
+/** yyyy-mm-dd for <input type="date"> */
+const dayValue = (iso: string | null) => (iso ? iso.slice(0, 10) : '')
 
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+function headline(c: Coupon) {
+  return c.discountType === 'PERCENT' ? `${c.valueBp / 100}% off` : `${rupees(c.valueBp)} off`
+}
+
+function state(c: Coupon): { label: string; cls: string } {
+  const now = Date.now()
+  if (!c.active) return { label: 'Off', cls: 'tag-error' }
+  if (c.expiresAt && Date.parse(c.expiresAt) < now) return { label: 'Expired', cls: 'tag-error' }
+  if (c.startsAt && Date.parse(c.startsAt) > now) return { label: 'Scheduled', cls: 'tag-warning' }
+  if (c.usageLimit !== null && c.used >= c.usageLimit) return { label: 'Used up', cls: 'tag-error' }
+  return { label: 'Live', cls: 'tag-ok' }
+}
+
+export default function AdminCouponsPage() {
+  const { data, error, loading, reload } = useAdminData<Coupon[]>('/api/admin/promotions')
+  const [form, setForm] = useState<FormState | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [flash, showFlash, clearFlash] = useFlash()
+
+  function toForm(c: Coupon): FormState {
+    return {
+      id: c.id,
+      code: c.code,
+      description: c.description ?? '',
+      discountType: c.discountType === 'FIXED' ? 'FIXED' : 'PERCENT',
+      value: String(c.discountType === 'PERCENT' ? c.valueBp / 100 : c.valueBp / 100),
+      minSpend: String(c.minSpendPaise / 100),
+      limited: c.usageLimit !== null,
+      usageLimit: String(c.usageLimit ?? 100),
+      perCustomerLimit: String(c.perCustomerLimit),
+      startsAt: dayValue(c.startsAt),
+      expiresAt: dayValue(c.expiresAt),
+      active: c.active,
+    }
   }
 
-  function filteredPromotions() {
-    if (activeTab === 'All') return promotions
-    if (activeTab === 'Expired') return promotions.filter((p) => p.status === 'expired')
-    const map: Record<string, Promotion['type'][]> = {
-      'Product Offers': ['product'],
-      'Combo Deals': ['combo'],
-      Coupons: ['coupon'],
-      'Cart Discounts': ['cart'],
-      'Flash Sales': ['flash'],
-    }
-    const types = map[activeTab] ?? []
-    return promotions.filter((p) => types.includes(p.type) && p.status !== 'expired')
-  }
-
-  async function handleSave() {
-    if (!form.name.trim()) {
-      showToast('Please enter a promotion name.')
-      return
-    }
-
-    try {
-      await fetch('/api/admin/promotions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kind: form.type === 'coupon' ? 'COUPON' : 'PROMOTION',
-          name: form.name,
-          type: form.type === 'combo' ? 'COMBO' : form.type === 'flash' ? 'FLASH' : 'COUPON',
-          discountType: form.discountType === 'percent' ? 'PERCENT' : 'FIXED',
-          valueBp: form.discountType === 'percent' ? form.discountValue * 100 : form.discountValue * 100,
-          code: form.code || undefined,
-          usageLimit: form.usageLimit || undefined,
-          startsAt: form.startDate || undefined,
-          expiresAt: form.endDate || undefined,
-          combinesWithCoupon: form.combinesCoupons,
-        }),
-      })
-    } catch {
-      // ignore
-    }
-
-    const newPromo: Promotion = {
-      id: Date.now(),
-      name: form.name,
-      type: form.type,
+  async function save() {
+    if (!form) return
+    const value = Number(form.value)
+    if (!Number.isFinite(value) || value <= 0) return showFlash('error', 'Enter the discount amount.')
+    if (form.discountType === 'PERCENT' && (value < 1 || value > 90)) return showFlash('error', 'A percentage discount must be between 1% and 90%.')
+    const payload = {
+      description: form.description.trim(),
       discountType: form.discountType,
-      discountValue: form.discountValue,
-      startDate: form.startDate,
-      endDate: form.endDate,
-      code: form.code,
-      usageLimit: form.usageLimit,
-      eligibleProducts: form.eligibleProducts,
-      combinesCoupons: form.combinesCoupons,
-      redemptions: 0,
-      discountGiven: 0,
-      status: 'scheduled',
+      valueBp: Math.round(value * 100), // % → basis points, ₹ → paise
+      minSpendPaise: Math.round((Number(form.minSpend) || 0) * 100),
+      usageLimit: form.limited ? Math.max(1, Math.round(Number(form.usageLimit) || 1)) : null,
+      perCustomerLimit: Math.max(1, Math.round(Number(form.perCustomerLimit) || 1)),
+      // Start at the beginning of the start day, end at the end of the end day (IST)
+      startsAt: form.startsAt ? `${form.startsAt}T00:00:00+05:30` : null,
+      expiresAt: form.expiresAt ? `${form.expiresAt}T23:59:59+05:30` : null,
+      active: form.active,
     }
-    setPromotions((prev) => [newPromo, ...prev])
-    setShowBuilder(false)
-    setForm({
-      name: '',
-      type: 'coupon',
-      discountType: 'percent',
-      discountValue: 10,
-      startDate: '',
-      endDate: '',
-      code: '',
-      usageLimit: 100,
-      eligibleProducts: '',
-      combinesCoupons: false,
-    })
-    showToast('✅ Promotion saved successfully!')
+    setSaving(true)
+    const r = form.id
+      ? await adminRequest(`/api/admin/promotions/${form.id}`, 'PATCH', payload)
+      : await adminRequest('/api/admin/promotions', 'POST', { ...payload, code: form.code.trim().toUpperCase() })
+    setSaving(false)
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not save the coupon.')
+    showFlash('ok', form.id ? 'Coupon updated.' : `Coupon ${form.code.toUpperCase()} created.`)
+    setForm(null)
+    reload()
   }
 
-  function handleDeactivate(id: number) {
-    setPromotions((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: 'expired' } : p))
-    )
-    showToast('Promotion deactivated.')
+  async function toggle(c: Coupon) {
+    const r = await adminRequest(`/api/admin/promotions/${c.id}`, 'PATCH', { active: !c.active })
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not change the coupon.')
+    showFlash('ok', `${c.code} switched ${c.active ? 'off' : 'on'}.`)
+    reload()
   }
 
-  const visible = filteredPromotions()
+  async function remove(c: Coupon) {
+    const r = await adminRequest(`/api/admin/promotions/${c.id}`, 'DELETE')
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not delete the coupon.')
+    showFlash('ok', `${c.code} deleted.`)
+    reload()
+  }
+
+  const rows = data ?? []
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Toast */}
-      {toast && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            background: '#1a1a1a',
-            color: '#fff',
-            padding: '12px 20px',
-            borderRadius: '10px',
-            fontSize: '14px',
-            zIndex: 9999,
-            borderLeft: '4px solid var(--ok)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-          }}
-        >
-          {toast}
+    <div>
+      <PageHeader
+        title="Coupons"
+        subtitle="Codes customers enter in their bag. Unlimited-use coupons are also advertised on the Offers page and the top banner; limited ones stay private."
+        actions={<button type="button" className="btn btn-primary" onClick={() => setForm({ ...EMPTY })}>New coupon</button>}
+      />
+
+      {error ? (
+        <Notice kind="error">{error}</Notice>
+      ) : loading && !data ? (
+        <Notice>Loading coupons…</Notice>
+      ) : rows.length === 0 ? (
+        <Notice>No coupons yet. Create one to offer a discount.</Notice>
+      ) : (
+        <div className="card" style={{ padding: '8px 16px', overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Discount</th>
+                <th>Rules</th>
+                <th style={{ textAlign: 'right' }}>Used</th>
+                <th style={{ textAlign: 'right' }}>Given</th>
+                <th>Status</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => {
+                const st = state(c)
+                return (
+                  <tr key={c.id}>
+                    <td>
+                      <code style={{ fontWeight: 700, color: 'var(--pr)' }}>{c.code}</code>
+                      {c.description && <div style={{ fontSize: '12px', color: 'var(--tx2)' }}>{c.description}</div>}
+                    </td>
+                    <td>{headline(c)}</td>
+                    <td style={{ fontSize: '12px', color: 'var(--tx2)' }}>
+                      {c.minSpendPaise > 0 ? `Min ${rupees(c.minSpendPaise)} · ` : ''}
+                      {c.perCustomerLimit === 1 ? 'Once per customer' : `${c.perCustomerLimit}× per customer`}
+                      {c.usageLimit === null ? ' · Public' : ' · Private'}
+                      <br />
+                      {c.startsAt ? `From ${formatDate(c.startsAt)}` : 'From now'}{c.expiresAt ? ` to ${formatDate(c.expiresAt)}` : ', no end date'}
+                    </td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{c.used}{c.usageLimit !== null ? ` / ${c.usageLimit}` : ''}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{rupees(c.discountGivenPaise)}</td>
+                    <td><span className={`tag ${st.cls}`}>{st.label}</span></td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => setForm(toForm(c))}>Edit</button>{' '}
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => toggle(c)}>{c.active ? 'Switch off' : 'Switch on'}</button>
+                      {c.used === 0 && (
+                        <>
+                          {' '}
+                          <button type="button" onClick={() => remove(c)} style={{ background: 'none', border: 0, color: 'var(--er)', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}>Delete</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Page Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: '28px',
-              fontWeight: 700,
-              color: 'var(--dk)',
-              margin: 0,
-            }}
-          >
-            Offers &amp; Promotions
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--tx2)', margin: '4px 0 0' }}>
-            Manage coupons, flash sales, combo deals, and discounts.
-          </p>
-        </div>
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={() => setShowBuilder((v) => !v)}
-        >
-          {showBuilder ? '✕ Close Builder' : '+ New Promotion'}
-        </button>
-      </div>
+      {form && (
+        <div role="dialog" aria-modal="true" aria-labelledby="coupon-form-title" style={{ position: 'fixed', inset: 0, background: 'rgba(58,21,32,0.45)', zIndex: 1500, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '32px 16px' }}>
+          <form onSubmit={(e) => { e.preventDefault(); save() }} className="card" style={{ background: '#fff', width: '100%', maxWidth: '560px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <h2 id="coupon-form-title" style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', color: 'var(--dk)', margin: 0 }}>
+              {form.id ? `Edit ${form.code}` : 'New coupon'}
+            </h2>
 
-      {/* Stats Row */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: '14px',
-        }}
-      >
-        {[
-          { label: 'Active', value: promotions.filter((p) => p.status === 'active').length, color: 'var(--ok)' },
-          { label: 'Scheduled', value: promotions.filter((p) => p.status === 'scheduled').length, color: 'var(--wn)' },
-          { label: 'Expired', value: promotions.filter((p) => p.status === 'expired').length, color: 'var(--tx2)' },
-          {
-            label: 'Total Redeemed',
-            value: promotions.reduce((a, p) => a + p.redemptions, 0),
-            color: 'var(--pr)',
-          },
-        ].map((s) => (
-          <div key={s.label} className="card" style={{ padding: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 700, color: s.color }}>{s.value}</div>
-            <div style={{ fontSize: '12px', color: 'var(--tx2)', marginTop: '2px' }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
+            {!form.id && (
+              <div>
+                <label htmlFor="cp-code" style={labelStyle}>Code *</label>
+                <input id="cp-code" className="input" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} placeholder="e.g. WED10" maxLength={20} required style={{ textTransform: 'uppercase' }} />
+              </div>
+            )}
 
-      {/* Main Grid: Table + Builder */}
-      <div className="admin-two-col-grid">
-        {/* Left: Table */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Filter Tabs */}
-          <div style={{ overflowX: 'auto', paddingBottom: '4px' }}>
-            <div style={{ display: 'flex', gap: '8px', minWidth: 'max-content' }}>
-              {FILTER_TABS.map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  style={{
-                    padding: '7px 14px',
-                    borderRadius: '20px',
-                    border: '1px solid var(--bd)',
-                    background: activeTab === tab ? 'var(--pr)' : '#fff',
-                    color: activeTab === tab ? '#fff' : 'var(--tx)',
-                    fontSize: '12px',
-                    fontWeight: activeTab === tab ? 600 : 400,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '520px' }}>
-                <thead>
-                  <tr style={{ background: '#F8F6F4', borderBottom: '1px solid var(--bd)' }}>
-                    {['Name', 'Type', 'Dates', 'Redeemed', 'Discount Given', 'Status', 'Actions'].map((h) => (
-                      <th
-                        key={h}
-                        style={{
-                          padding: '12px 16px',
-                          textAlign: 'left',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          letterSpacing: '0.08em',
-                          textTransform: 'uppercase',
-                          color: 'var(--tx2)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.length === 0 && (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--tx2)', fontSize: '14px' }}>
-                        No promotions in this category.
-                      </td>
-                    </tr>
-                  )}
-                  {visible.map((promo, i) => (
-                    <tr
-                      key={promo.id}
-                      style={{ borderBottom: i < visible.length - 1 ? '1px solid var(--bd)' : 'none' }}
-                    >
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--dk)' }}>{promo.name}</div>
-                        {promo.code && (
-                          <div
-                            style={{
-                              display: 'inline-block',
-                              marginTop: '4px',
-                              padding: '2px 8px',
-                              background: '#f3e8d6',
-                              color: '#7a4a00',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              letterSpacing: '0.1em',
-                              fontFamily: 'monospace',
-                            }}
-                          >
-                            {promo.code}
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: '14px 16px', fontSize: '12px', color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
-                        {TYPE_LABELS[promo.type]}
-                      </td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ fontSize: '11px', color: 'var(--tx2)', lineHeight: 1.6 }}>
-                          <div>{promo.startDate.split('T')[0]}</div>
-                          <div>→ {promo.endDate.split('T')[0]}</div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 600, color: 'var(--tx)' }}>
-                        {promo.redemptions}
-                        <span style={{ fontSize: '11px', color: 'var(--tx2)', fontWeight: 400 }}>
-                          {' '}/{promo.usageLimit}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 16px', fontSize: '13px', color: 'var(--tx)', whiteSpace: 'nowrap' }}>
-                        ₹{promo.discountGiven.toLocaleString('en-IN')}
-                      </td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <span className={STATUS_TAG[promo.status]}>
-                          {promo.status.charAt(0).toUpperCase() + promo.status.slice(1)}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 16px' }}>
-                        {promo.status !== 'expired' && (
-                          <button
-                            className="btn btn-sm"
-                            onClick={() => handleDeactivate(promo.id)}
-                            style={{ fontSize: '11px', color: 'var(--er, #c0392b)' }}
-                          >
-                            Deactivate
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Promotion Builder */}
-        {showBuilder && (
-          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px', alignSelf: 'start' }}>
-            <h3
-              style={{
-                fontFamily: 'var(--font-serif)',
-                fontSize: '18px',
-                fontWeight: 700,
-                color: 'var(--dk)',
-                margin: 0,
-                paddingBottom: '14px',
-                borderBottom: '1px solid var(--bd)',
-              }}
-            >
-              Promotion Builder
-            </h3>
-
-            {/* Name */}
             <div>
-              <label className="input-label">Promotion Name *</label>
-              <input
-                className="input"
-                placeholder="e.g. Summer Bridal Sale"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                style={{ width: '100%' }}
-              />
+              <label htmlFor="cp-desc" style={labelStyle}>Description shown to customers</label>
+              <input id="cp-desc" className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="e.g. 10% off for wedding season" maxLength={200} />
             </div>
 
-            {/* Type + Discount type */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
               <div>
-                <label className="input-label">Promotion Type</label>
-                <select
-                  className="input"
-                  value={form.type}
-                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as Promotion['type'] }))}
-                  style={{ width: '100%' }}
-                >
-                  <option value="product">Product Offer</option>
-                  <option value="combo">Combo Deal</option>
-                  <option value="coupon">Coupon</option>
-                  <option value="cart">Cart Discount</option>
-                  <option value="flash">Flash Sale</option>
-                  <option value="quantity">Quantity Discount</option>
+                <label htmlFor="cp-type" style={labelStyle}>Discount type</label>
+                <select id="cp-type" className="input" value={form.discountType} onChange={(e) => setForm({ ...form, discountType: e.target.value as FormState['discountType'] })}>
+                  <option value="PERCENT">Percentage (%)</option>
+                  <option value="FIXED">Fixed amount (₹)</option>
                 </select>
               </div>
               <div>
-                <label className="input-label">Discount Type</label>
-                <select
-                  className="input"
-                  value={form.discountType}
-                  onChange={(e) => setForm((f) => ({ ...f, discountType: e.target.value as Promotion['discountType'] }))}
-                  style={{ width: '100%' }}
-                >
-                  <option value="percent">% Off</option>
-                  <option value="fixed">Fixed Amount Off</option>
-                  <option value="bundle">Fixed Bundle Price</option>
-                </select>
+                <label htmlFor="cp-value" style={labelStyle}>{form.discountType === 'PERCENT' ? 'Percent off *' : 'Rupees off *'}</label>
+                <input id="cp-value" className="input" type="number" min="1" step="1" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} required />
+              </div>
+              <div>
+                <label htmlFor="cp-min" style={labelStyle}>Minimum order (₹)</label>
+                <input id="cp-min" className="input" type="number" min="0" step="1" value={form.minSpend} onChange={(e) => setForm({ ...form, minSpend: e.target.value })} />
+              </div>
+              <div>
+                <label htmlFor="cp-per" style={labelStyle}>Uses per customer</label>
+                <input id="cp-per" className="input" type="number" min="1" step="1" value={form.perCustomerLimit} onChange={(e) => setForm({ ...form, perCustomerLimit: e.target.value })} />
+              </div>
+              <div>
+                <label htmlFor="cp-start" style={labelStyle}>Starts</label>
+                <input id="cp-start" className="input" type="date" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} />
+              </div>
+              <div>
+                <label htmlFor="cp-end" style={labelStyle}>Ends</label>
+                <input id="cp-end" className="input" type="date" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} />
               </div>
             </div>
 
-            {/* Discount value + Coupon Code */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-              <div>
-                <label className="input-label">
-                  Discount Value {form.discountType === 'percent' ? '(%)' : '(₹)'}
-                </label>
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  value={form.discountValue}
-                  onChange={(e) => setForm((f) => ({ ...f, discountValue: Number(e.target.value) }))}
-                  style={{ width: '100%' }}
-                />
-              </div>
-              {form.type === 'coupon' && (
-                <div>
-                  <label className="input-label">Coupon Code</label>
-                  <input
-                    className="input"
-                    placeholder="e.g. BRIDE15"
-                    value={form.code}
-                    onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-                    style={{ width: '100%', fontFamily: 'monospace', letterSpacing: '0.08em' }}
-                  />
-                </div>
-              )}
-            </div>
+            <fieldset style={{ border: '1px solid var(--bd)', borderRadius: '4px', padding: '12px', margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+              <legend style={{ ...labelStyle, padding: '0 4px', marginBottom: 0 }}>Who can use it</legend>
+              <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input type="radio" name="cp-limit" checked={!form.limited} onChange={() => setForm({ ...form, limited: false })} /> Everyone, no total limit (advertised on the Offers page)
+              </label>
+              <label style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input type="radio" name="cp-limit" checked={form.limited} onChange={() => setForm({ ...form, limited: true })} /> Private, first
+                <input aria-label="Total uses" className="input" type="number" min="1" step="1" value={form.usageLimit} disabled={!form.limited} onChange={(e) => setForm({ ...form, usageLimit: e.target.value })} style={{ width: '90px', height: '32px' }} />
+                uses only
+              </label>
+            </fieldset>
 
-            {/* Start + End */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-              <div>
-                <label className="input-label">Start Date &amp; Time</label>
-                <input
-                  className="input"
-                  type="datetime-local"
-                  value={form.startDate}
-                  onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
-                  style={{ width: '100%' }}
-                />
-              </div>
-              <div>
-                <label className="input-label">End Date &amp; Time</label>
-                <input
-                  className="input"
-                  type="datetime-local"
-                  value={form.endDate}
-                  onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-                  style={{ width: '100%' }}
-                />
-              </div>
-            </div>
-
-            {/* Eligible products + Usage limit */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-              <div>
-                <label className="input-label">Eligible Products</label>
-                <input
-                  className="input"
-                  placeholder="All products / Bangles, Maangtika…"
-                  value={form.eligibleProducts}
-                  onChange={(e) => setForm((f) => ({ ...f, eligibleProducts: e.target.value }))}
-                  style={{ width: '100%' }}
-                />
-              </div>
-              <div>
-                <label className="input-label">Usage Limit</label>
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  value={form.usageLimit}
-                  onChange={(e) => setForm((f) => ({ ...f, usageLimit: Number(e.target.value) }))}
-                  style={{ width: '100%' }}
-                />
-              </div>
-            </div>
-
-            {/* Combine with coupons */}
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                color: 'var(--tx)',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={form.combinesCoupons}
-                onChange={(e) => setForm((f) => ({ ...f, combinesCoupons: e.target.checked }))}
-                style={{ width: '16px', height: '16px', accentColor: 'var(--pr)', cursor: 'pointer' }}
-              />
-              Can combine with other coupons
+            <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '13px' }}>
+              <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Switched on
             </label>
 
-            {/* Actions */}
-            <div style={{ display: 'flex', gap: '10px', paddingTop: '6px', flexWrap: 'wrap' }}>
-              <button className="btn btn-primary" onClick={handleSave} style={{ flex: 1, justifyContent: 'center', minWidth: '120px' }}>
-                Save Promotion
-              </button>
-              <button
-                className="btn btn-outline"
-                onClick={() => showToast('Preview mode coming soon.')}
-                style={{ flex: 1, justifyContent: 'center', minWidth: '100px' }}
-              >
-                Preview
-              </button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setForm(null)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : form.id ? 'Save changes' : 'Create coupon'}</button>
             </div>
-          </div>
-        )}
+          </form>
+        </div>
+      )}
 
-        {/* Show hint when builder closed */}
-        {!showBuilder && (
-          <div
-            className="card"
-            style={{
-              padding: '36px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '12px',
-              textAlign: 'center',
-              alignSelf: 'start',
-              background: 'repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(235,211,207,0.12) 8px, rgba(235,211,207,0.12) 16px)',
-            }}
-          >
-            <div style={{ fontSize: '36px' }}>🎁</div>
-            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dk)' }}>Promotion Builder</div>
-            <div style={{ fontSize: '13px', color: 'var(--tx2)', maxWidth: '200px' }}>
-              Click &ldquo;New Promotion&rdquo; to create a coupon, combo deal, or flash sale.
-            </div>
-          </div>
-        )}
-      </div>
+      <FlashMessage flash={flash} onClose={clearFlash} />
     </div>
   )
 }
-

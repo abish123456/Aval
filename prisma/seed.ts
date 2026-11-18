@@ -33,6 +33,20 @@ async function main() {
   console.log('Creating admin owner user...')
   const passwordHash = await bcrypt.hash('aval2026', 12)
   const admin = await prisma.user.upsert({
+    where: { email: 'diana@aval.com' },
+    update: { passwordHash, role: 'OWNER' },
+    create: {
+      name: 'Diana / Studio Owner',
+      email: 'diana@aval.com',
+      passwordHash,
+      role: 'OWNER',
+      phone: '+91 94883 45678',
+    },
+  })
+  console.log(`Admin user created: ${admin.email}`)
+
+  // Also maintain backup owner if needed
+  await prisma.user.upsert({
     where: { email: 'abishek@avalstore.in' },
     update: { passwordHash, role: 'OWNER' },
     create: {
@@ -43,7 +57,6 @@ async function main() {
       phone: '+91 94883 45678',
     },
   })
-  console.log(`Admin user created: ${admin.email}`)
 
   // 3. Demo Customer User
   const customerPassword = await bcrypt.hash('customer2026', 12)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { ok, apiError } from '@/src/server/api/helpers'
+import { rateLimit, clientIp } from '@/src/server/api/rate-limit'
 
 // ---------------------------------------------------------------------------
 // POST /api/coupons/check — Validate coupon and return discount info
@@ -14,6 +15,10 @@ const checkSchema = z.object({
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    const limit = rateLimit(`coupon-check:${clientIp(req)}`, 20, 10 * 60 * 1000)
+    if (!limit.ok) {
+      return NextResponse.json({ success: false, valid: false, error: 'Too many attempts. Please wait a few minutes.' }, { status: 429 })
+    }
     const { code, subtotalPaise } = checkSchema.parse(await req.json())
 
     const coupon = await prisma.coupon.findUnique({

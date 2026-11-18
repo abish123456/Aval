@@ -768,10 +768,6 @@ select.input { cursor: pointer; }
     display: none !important;
   }
 
-  .admin-sidebar {
-    display: none;
-  }
-
   .desktop-only-text {
     display: none !important;
   }
@@ -998,6 +994,12 @@ select.input { cursor: pointer; }
 }
 
 /* ── Admin Responsive Layout & Grids ──────────────────────────── */
+/* Menu open/close buttons only exist where the sidebar is a drawer */
+.mobile-admin-menu-btn { display: none; }
+@media (max-width: 1024px) {
+  .mobile-admin-menu-btn { display: inline-flex !important; align-items: center; justify-content: center; }
+}
+
 .admin-sidebar {
   width: 260px;
   background: var(--dk, #3A1520);

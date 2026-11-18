@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { PRODUCTS } from '@/lib/data'
+import type { Product } from '@/lib/data'
+import { useWishlist } from '@/context/wishlist'
 import { useCart } from '@/context/CartContext'
 
 function fmt(n: number) {
@@ -10,20 +11,18 @@ function fmt(n: number) {
 }
 
 export default function WishlistPage() {
-  const [savedItems, setSavedItems] = useState([PRODUCTS[0], PRODUCTS[3]])
+  const { items: savedItems, remove } = useWishlist()
   const { addItem } = useCart()
   const [toast, setToast] = useState<string | null>(null)
 
-  const handleMoveToBag = (p: typeof PRODUCTS[0]) => {
-    addItem(p, p.sizes[0] || '2.6', undefined, undefined, 1)
-    setSavedItems(savedItems.filter((item) => item.id !== p.id))
+  const handleMoveToBag = (p: Product) => {
+    addItem(p, p.sizes[0] ?? '', undefined, undefined, 1)
+    remove(p.id)
     setToast(`Moved ${p.name} to your Bag!`)
     setTimeout(() => setToast(null), 2500)
   }
 
-  const handleRemove = (id: string) => {
-    setSavedItems(savedItems.filter((item) => item.id !== id))
-  }
+  const handleRemove = (id: string) => remove(id)
 
   return (
     <div className="container" style={{ paddingTop: '40px', paddingBottom: '90px' }}>

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 
@@ -18,6 +18,10 @@ interface Enquiry {
   token: string
   customerName: string
   totalPaise: number
+  subtotalPaise?: number
+  discountPaise?: number
+  shippingPaise?: number
+  couponCode?: string | null
   status: EnquiryStatus
   paymentStatus: 'PENDING' | 'PAID' | 'FAILED'
   trackingNumber: string | null
@@ -39,7 +43,8 @@ interface Enquiry {
 }
 
 function fmt(n: number) {
-  return '₹' + n.toLocaleString('en-IN')
+  // Whole rupees print plainly; percentage coupons can leave paise, shown as .xx
+  return '₹' + n.toLocaleString('en-IN', Number.isInteger(n) ? undefined : { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // Professional SVGs
@@ -109,66 +114,71 @@ const STATUS_STEPS: { key: EnquiryStatus; label: string; desc: string }[] = [
 
 const STATUS_ORDER = ['ENQUIRY', 'CONFIRMED', 'MAKING', 'DISPATCHED', 'DELIVERED', 'CANCELLED']
 
+async function fetchEnquiry(
+  token: string
+): Promise<{ state: 'ready' | 'locked' | 'notfound' | 'error'; data?: Enquiry }> {
+  try {
+    const res = await fetch(`/api/enquiries/${token}`, { cache: 'no-store' })
+    if (res.ok) return { state: 'ready', data: await res.json() }
+    if (res.status === 401) return { state: 'locked' }
+    if (res.status === 404) return { state: 'notfound' }
+    return { state: 'error' }
+  } catch (err) {
+    console.error('Error loading enquiry', err)
+    return { state: 'error' }
+  }
+}
+
 export default function OrderLinkPage() {
   const params = useParams()
   const token = params?.token as string
 
-  const [manualVerified, setManualVerified] = useState(false)
+  // Access is decided by the server: it returns 401 until this browser holds the
+  // httpOnly access cookie set by /verify (or by placing the order).
+  const [access, setAccess] = useState<'checking' | 'locked' | 'ready' | 'notfound' | 'error'>('checking')
   const [enquiry, setEnquiry] = useState<Enquiry | null>(null)
   const [activeTab, setActiveTab] = useState<'status' | 'chat' | 'pay' | 'rate'>('status')
 
-  const isStorageVerified = useSyncExternalStore(
-    (callback) => {
-      if (typeof window !== 'undefined') {
-        window.addEventListener('storage', callback)
-        return () => window.removeEventListener('storage', callback)
-      }
-      return () => {}
-    },
-    () => (typeof window !== 'undefined' ? sessionStorage.getItem(`aval_verified_${token}`) === '1' : false),
-    () => false
-  )
-
-  const verified = manualVerified || isStorageVerified
+  function applyResult(r: Awaited<ReturnType<typeof fetchEnquiry>>) {
+    if (r.data) setEnquiry(r.data)
+    setAccess(r.state)
+  }
 
   useEffect(() => {
-    if (!verified || !token) return
-    let isCancelled = false
-
-    fetch(`/api/enquiries/${token}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!isCancelled && data) {
-          setEnquiry(data)
-        }
-      })
-      .catch((err) => console.error('Error loading enquiry', err))
-
+    if (!token) return
+    let cancelled = false
+    fetchEnquiry(token).then((r) => {
+      if (!cancelled) applyResult(r)
+    })
     return () => {
-      isCancelled = true
+      cancelled = true
     }
-  }, [verified, token])
+  }, [token])
 
   function refetchEnquiry() {
-    if (!token) return
-    fetch(`/api/enquiries/${token}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setEnquiry(data)
-      })
-      .catch((err) => console.error('Error refreshing enquiry', err))
+    if (token) fetchEnquiry(token).then(applyResult)
   }
 
-  function onVerified() {
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem(`aval_verified_${token}`, '1')
-    }
-    setManualVerified(true)
-    refetchEnquiry()
+  if (access === 'locked') {
+    return <VerifyScreen token={token} onVerified={refetchEnquiry} />
   }
 
-  if (!verified) {
-    return <VerifyScreen token={token} onVerified={onVerified} />
+  if (access === 'notfound' || access === 'error') {
+    return (
+      <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '24px' }}>
+        <div style={{ textAlign: 'center', maxWidth: '420px' }}>
+          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '24px', color: 'var(--dk)', marginBottom: '8px' }}>
+            {access === 'notfound' ? 'Order link not found' : 'Could not load your order'}
+          </h1>
+          <p style={{ color: 'var(--tx2)', fontSize: '14px', marginBottom: '20px' }}>
+            {access === 'notfound'
+              ? 'Please check the link from your order confirmation, or find your order with your phone number.'
+              : 'Please check your connection and try again.'}
+          </p>
+          <Link href="/track-order" className="btn btn-primary">Find my order</Link>
+        </div>
+      </div>
+    )
   }
 
   if (!enquiry) {
@@ -256,9 +266,15 @@ export default function OrderLinkPage() {
                   : 'Awaiting Payment Confirmation'}
               </div>
               <div style={{ fontSize: '12px', opacity: 0.9 }}>
-                {isPaid
-                  ? 'Payment confirmed. Artisans are processing your bangles.'
-                  : 'Chat with our artisan below or proceed to complete payment.'}
+                {isCancelled
+                  ? 'This order has been cancelled. Message us in the chat if you have questions.'
+                  : !isPaid
+                  ? 'Chat with our artisan below or proceed to complete payment.'
+                  : enquiry.status === 'DELIVERED'
+                  ? 'Delivered. We hope you love your bangles.'
+                  : enquiry.status === 'DISPATCHED'
+                  ? 'Your order is on its way.'
+                  : 'Payment confirmed. Artisans are handcrafting your order.'}
               </div>
             </div>
           </div>
@@ -330,7 +346,7 @@ export default function OrderLinkPage() {
 
         {/* Tab Content */}
         {activeTab === 'status' && <StatusView enquiry={enquiry} />}
-        {activeTab === 'chat' && <ChatView token={token} initialMessages={enquiry.messages} onNewMessage={(msg) => setEnquiry(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : prev)} />}
+        {activeTab === 'chat' && <ChatView token={token} initialMessages={enquiry.messages} onNewMessage={(msg) => setEnquiry(prev => prev ? { ...prev, messages: [...prev.messages, msg] } : prev)} onStatusChange={(status, trackingNumber) => setEnquiry(prev => prev ? { ...prev, status, trackingNumber } : prev)} />}
         {activeTab === 'pay' && !isPaid && !isCancelled && (
           <PayView token={token} totalPaise={enquiry.totalPaise} onPaid={refetchEnquiry} />
         )}
@@ -457,7 +473,7 @@ function StatusView({ enquiry }: { enquiry: Enquiry }) {
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px', borderBottom: '1px solid #f2ecea' }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--dk)' }}>{item.productName}</div>
-                <div style={{ fontSize: '12px', color: 'var(--tx2)' }}>Size: <strong>{item.size}</strong> • Qty: {item.qty}</div>
+                <div style={{ fontSize: '12px', color: 'var(--tx2)' }}>{item.size ? <>Size: <strong>{item.size}</strong> • </> : null}Qty: {item.qty}</div>
               </div>
               <div style={{ fontWeight: 600, color: 'var(--pr)', fontSize: '14px' }}>
                 {fmt((item.unitPaise * item.qty) / 100)}
@@ -465,6 +481,25 @@ function StatusView({ enquiry }: { enquiry: Enquiry }) {
             </div>
           ))}
         </div>
+
+        {(enquiry.discountPaise ?? 0) > 0 || (enquiry.shippingPaise ?? 0) > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '12px', fontSize: '13px', color: 'var(--tx2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Subtotal</span>
+              <span>{fmt((enquiry.subtotalPaise ?? 0) / 100)}</span>
+            </div>
+            {(enquiry.discountPaise ?? 0) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--ok)' }}>
+                <span>Coupon {enquiry.couponCode}</span>
+                <span>− {fmt((enquiry.discountPaise ?? 0) / 100)}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Shipping</span>
+              <span>{(enquiry.shippingPaise ?? 0) > 0 ? fmt((enquiry.shippingPaise ?? 0) / 100) : 'FREE'}</span>
+            </div>
+          </div>
+        ) : null}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', paddingTop: '12px', borderTop: '2px solid var(--bd)', fontWeight: 700, fontSize: '16px', color: 'var(--pr)' }}>
           <span>Total Order Value</span>
@@ -542,11 +577,13 @@ function StatusView({ enquiry }: { enquiry: Enquiry }) {
 // ---------------------------------------------------------------------------
 // Tab 2: Chat with Artisan (Real-time SSE + Instant Send)
 // ---------------------------------------------------------------------------
-function ChatView({ token, initialMessages, onNewMessage }: { token: string; initialMessages: Message[]; onNewMessage: (msg: Message) => void }) {
+function ChatView({ token, initialMessages, onNewMessage, onStatusChange }: { token: string; initialMessages: Message[]; onNewMessage: (msg: Message) => void; onStatusChange: (status: EnquiryStatus, trackingNumber: string | null) => void }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // Track IDs we added optimistically so SSE dedup skips them
+  const pendingIds = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -560,10 +597,25 @@ function ChatView({ token, initialMessages, onNewMessage }: { token: string; ini
       try {
         const msg: Message = JSON.parse(event.data)
         setMessages((prev) => {
+          // Skip if already in list OR was added optimistically by handleSend
           if (prev.some((m) => m.id === msg.id)) return prev
+          if (pendingIds.current.has(msg.id)) {
+            pendingIds.current.delete(msg.id)
+            return prev
+          }
           onNewMessage(msg)
           return [...prev, msg]
         })
+      } catch {
+        // silent
+      }
+    })
+
+    // Live order status updates — admin changes status/tracking → customer sees it instantly
+    eventSource.addEventListener('status', (event) => {
+      try {
+        const update = JSON.parse(event.data) as { status: EnquiryStatus; trackingNumber: string | null }
+        onStatusChange(update.status, update.trackingNumber)
       } catch {
         // silent
       }
@@ -585,10 +637,12 @@ function ChatView({ token, initialMessages, onNewMessage }: { token: string; ini
       const res = await fetch(`/api/enquiries/${token}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senderType: 'CUSTOMER', body: bodyText }),
+        body: JSON.stringify({ body: bodyText }),
       })
       if (res.ok) {
         const newMsg: Message = await res.json()
+        // Mark as pending so SSE doesn't double-add it
+        pendingIds.current.add(newMsg.id)
         setMessages((m) => {
           if (m.some((existing) => existing.id === newMsg.id)) return m
           onNewMessage(newMsg)
@@ -730,8 +784,26 @@ function PayView({ token, totalPaise, onPaid }: { token: string; totalPaise: num
             contact: data.customerPhone,
           },
           theme: { color: '#7A1026' },
-          handler: () => {
-            setTimeout(onPaid, 1500)
+          handler: async (response: {
+            razorpay_order_id: string
+            razorpay_payment_id: string
+            razorpay_signature: string
+          }) => {
+            // Confirm on the server straight away; the webhook is the backup.
+            try {
+              await fetch(`/api/enquiries/${token}/pay/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                }),
+              })
+            } catch {
+              // fall through — the webhook will still confirm the payment
+            }
+            onPaid()
           },
         })
         rzp.open()

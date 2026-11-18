@@ -12,11 +12,8 @@ import { ok, apiError } from '@/src/server/api/helpers'
 export async function GET(): Promise<NextResponse> {
   try {
     const session = await getSession()
-    if (session) {
-      requirePermission(session.role, 'categories:read')
-    } else if (process.env.NODE_ENV !== 'development') {
-      throw new AuthError()
-    }
+    if (!session) throw new AuthError()
+    requirePermission(session.role, 'categories:read')
 
     const categories = await prisma.category.findMany({
       orderBy: { sortOrder: 'asc' },
@@ -49,21 +46,18 @@ export async function GET(): Promise<NextResponse> {
 // ---------------------------------------------------------------------------
 
 const createCategorySchema = z.object({
-  name: z.string().min(2),
-  slug: z.string().min(2),
-  image: z.string().default('/images/hero_bangles.jpg'),
-  description: z.string().default(''),
-  sortOrder: z.number().int().default(0),
+  name: z.string().trim().min(2, 'Enter a category name').max(80),
+  slug: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Use lowercase letters, numbers and dashes in the URL').max(80),
+  image: z.string().trim().min(1).max(500).default('/images/hero_bangles.jpg'),
+  description: z.string().trim().max(1000).default(''),
+  sortOrder: z.number().int().min(0).max(999).default(0),
 })
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const session = await getSession()
-    if (session) {
-      requirePermission(session.role, 'categories:write')
-    } else if (process.env.NODE_ENV !== 'development') {
-      throw new AuthError()
-    }
+    if (!session) throw new AuthError()
+    requirePermission(session.role, 'categories:write')
 
     const raw = await req.json()
     if (!raw.slug && raw.name) {
@@ -75,7 +69,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const existing = await prisma.category.findUnique({ where: { slug: body.slug } })
     if (existing) {
       return NextResponse.json(
-        { success: false, error: 'Category with this slug already exists' },
+        { success: false, error: 'A category with this name already exists' },
         { status: 409 }
       )
     }
@@ -84,7 +78,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       data: body,
     })
 
-    const actorId = session?.userId ?? 'admin-dev'
+    const actorId = session.userId
     try {
       await prisma.auditLog.create({
         data: {

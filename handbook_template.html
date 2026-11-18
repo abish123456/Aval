@@ -1,0 +1,558 @@
+<title>AVAL Testing Handbook</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap">
+<style>
+/* Layout: sticky progress bar + section tabs; test cases as expandable rows grouped by phase; tracker fields inline */
+:root{
+  --bg:#f7f5f6; --surface:#ffffff; --fg:#231a1e; --muted:#6a5c62; --line:#e6dfe2; --accent:#7a1026; --accent-soft:#f6e7eb;
+  --pass:#1f6b44; --pass-bg:#e1f2e8; --fail:#b3261e; --fail-bg:#fbe7e5; --block:#9a5b00; --block-bg:#fcefd8; --nt:#5d6170; --nt-bg:#eceef3;
+  --code:#f1ecef;
+  --f-display:"Fraunces",Georgia,serif; --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151114; --surface:#1e191c; --fg:#efe8eb; --muted:#a99ca2; --line:#342c30; --accent:#e989a8; --accent-soft:#3a1d27;
+  --pass:#7fd3a3; --pass-bg:#16301f; --fail:#ff8f86; --fail-bg:#3b1b19; --block:#f2bd66; --block-bg:#3a2a12; --nt:#b7bccb; --nt-bg:#262832; --code:#2a2327; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151114; --surface:#1e191c; --fg:#efe8eb; --muted:#a99ca2; --line:#342c30; --accent:#e989a8; --accent-soft:#3a1d27;
+  --pass:#7fd3a3; --pass-bg:#16301f; --fail:#ff8f86; --fail-bg:#3b1b19; --block:#f2bd66; --block-bg:#3a2a12; --nt:#b7bccb; --nt-bg:#262832; --code:#2a2327; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.6 var(--f-body);margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+header.top .wrap{padding-block:12px 0;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand h1{font:700 22px/1.2 var(--f-display);margin:0;text-wrap:balance}
+.save-note{font-size:12px;color:var(--muted)}
+.progress{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--nt-bg)}
+.progress span{display:block;height:100%}
+.counts{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.counts b{color:var(--fg)}
+nav.tabs{display:flex;gap:4px;overflow-x:auto}
+nav.tabs a{padding:8px 12px;color:var(--muted);text-decoration:none;font-weight:500;font-size:14px;border-bottom:2px solid transparent;white-space:nowrap}
+nav.tabs a[aria-current="page"]{color:var(--accent);border-color:var(--accent)}
+h2{font:700 26px/1.25 var(--f-display);margin:32px 0 8px;text-wrap:balance}
+h3{font:600 18px/1.3 var(--f-body);margin:28px 0 6px}
+p,li{max-width:72ch}
+a{color:var(--accent)}
+code,.mono{font-family:var(--f-mono);font-size:13px;background:var(--code);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+.chip{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.03em;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.s-Pass{background:var(--pass-bg);color:var(--pass)} .s-Fail{background:var(--fail-bg);color:var(--fail)} .s-Blocked{background:var(--block-bg);color:var(--block)} .s-NotTested{background:var(--nt-bg);color:var(--nt)}
+.t-chip{background:var(--accent-soft);color:var(--accent)}
+.k-chip{background:var(--fail-bg);color:var(--fail)}
+.n-chip{background:var(--block-bg);color:var(--block)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:16px 0}
+.filters select,.filters input{font:inherit;font-size:14px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg)}
+.phase{margin-top:28px}
+.phase-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.phase-head h3{margin:0}
+.phase-intro{color:var(--muted);font-size:14px;margin:4px 0 10px}
+details.tc{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:8px}
+details.tc[data-status="Pass"]{border-left:4px solid var(--pass)} details.tc[data-status="Fail"]{border-left:4px solid var(--fail)} details.tc[data-status="Blocked"]{border-left:4px solid var(--block)}
+details.tc summary{list-style:none;cursor:pointer;padding:12px 16px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:baseline}
+details.tc summary::-webkit-details-marker{display:none}
+.tc-id{font:500 13px var(--f-mono);color:var(--muted)}
+.tc-title{font-weight:600}
+.tc-title small{display:block;font-weight:400;color:var(--muted);font-size:12.5px}
+.tc-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.tc-body{padding:4px 16px 16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+.tc-body h4{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}
+.tc-body ol,.tc-body ul{margin:0;padding-left:22px}
+.tc-body li{margin-bottom:4px}
+.known{background:var(--fail-bg);color:var(--fg);border-radius:6px;padding:8px 12px;font-size:14px}
+.known b{color:var(--fail)}
+.track{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;background:var(--bg);border-radius:6px;padding:12px}
+.track label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.track textarea,.track input,.track select{font:inherit;font-size:14px;font-weight:400;color:var(--fg);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);width:100%;min-width:0}
+.track .wide{grid-column:1/-1}
+.saved{font-size:12px;color:var(--muted);grid-column:1/-1}
+.statusbtns{display:flex;gap:6px;flex-wrap:wrap}
+.statusbtns button{font:600 13px var(--f-body);padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+.statusbtns button[aria-pressed="true"].b-Pass{background:var(--pass);border-color:var(--pass);color:var(--surface)}
+.statusbtns button[aria-pressed="true"].b-Fail{background:var(--fail);border-color:var(--fail);color:var(--surface)}
+.statusbtns button[aria-pressed="true"].b-Blocked{background:var(--block);border-color:var(--block);color:var(--surface)}
+.statusbtns button[aria-pressed="true"].b-NotTested{background:var(--nt);border-color:var(--nt);color:var(--surface)}
+button.primary{font:600 14px var(--f-body);padding:8px 16px;border-radius:6px;border:0;background:var(--accent);color:var(--surface);cursor:pointer}
+button.ghost{font:500 13px var(--f-body);padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+button:focus-visible,a:focus-visible,summary:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bugform{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.bugform label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.bugform input,.bugform textarea,.bugform select{font:inherit;font-size:14px;font-weight:400;color:var(--fg);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);min-width:0}
+.bugform .wide{grid-column:1/-1}
+.sev-Critical{background:var(--fail-bg);color:var(--fail)} .sev-Major{background:var(--block-bg);color:var(--block)} .sev-Moderate{background:var(--accent-soft);color:var(--accent)} .sev-Minor{background:var(--nt-bg);color:var(--nt)}
+.bug{display:flex;flex-direction:column;gap:6px}
+.bug-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.bug pre{white-space:pre-wrap;font:inherit;margin:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.kpi b{display:block;font:700 26px var(--f-display);font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.muted{color:var(--muted)}
+.banner{border-radius:8px;padding:10px 14px;margin-top:14px;font-size:14px}
+.banner.warn{background:var(--block-bg)}
+.banner.err{background:var(--fail-bg)}
+.verdict{border-left:4px solid var(--fail);background:var(--fail-bg);padding:12px 16px;border-radius:6px}
+@media (max-width:600px){details.tc summary{grid-template-columns:minmax(0,1fr)} .tc-chips{justify-content:flex-start} .brand h1{font-size:19px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>AVAL Testing Handbook</h1>
+      <span class="save-note" id="saveNote">Connecting to saved results…</span>
+    </div>
+    <div class="progress" id="bar" aria-hidden="true"></div>
+    <div class="counts" id="counts"></div>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#guide">How to use</a>
+      <a href="#tests">Test cases</a>
+      <a href="#checklist">Checklist</a>
+      <a href="#bugs">Bugs</a>
+      <a href="#report">Summary &amp; readiness</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="storeBanner"></div>
+
+  <!-- ============================ GUIDE ============================ -->
+  <section id="view-guide" data-view="guide">
+    <h2>How to use this handbook</h2>
+    <p>Work through the test cases in order, starting at <span class="mono">TC-001</span>. Each one says what to prepare, exactly what to click or type, and what you should see. After each test, choose <b>Pass</b>, <b>Fail</b>, <b>Blocked</b> (can’t be done yet) or leave it <b>Not tested</b>, write what actually happened, and note your screenshot file name. Everything you enter is saved automatically.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-top:0">What AVAL does</h3>
+        <p>A bridal-accessories shop. Customers browse, add items to a bag, and place an order <b>without an account</b>. Each order gets a private link (<span class="mono">/o/…</span>) where the customer chats with the artisan, pays through Razorpay and tracks delivery. Brides can also request a bespoke design and accept a quote. The shop owner runs everything from <span class="mono">/admin</span>.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Who uses it</h3>
+        <ul>
+          <li><b>Customer</b> (guest, no login): browse, bag, checkout, order page, track order, custom requests, quotes.</li>
+          <li><b>Owner</b> (admin): everything, including Settings and deleting coupons.</li>
+          <li><b>Staff</b> (admin): orders, products, coupons, reviews; cannot save Settings or delete coupons.</li>
+        </ul>
+        <p class="muted">There is no customer registration, login or profile screen, so those phases are not in this handbook.</p>
+      </div>
+    </div>
+
+    <h3>Test types</h3>
+    <div class="tbl"><table>
+      <tr><th>Tag</th><th>Meaning</th></tr>
+      <tr><td><span class="chip t-chip">Positive</span></td><td>Normal use; it should work.</td></tr>
+      <tr><td><span class="chip t-chip">Negative</span></td><td>Wrong input or forbidden action; it should be refused with a clear message.</td></tr>
+      <tr><td><span class="chip t-chip">Edge case</span></td><td>Unusual situations: double clicks, offline, long text, two tabs.</td></tr>
+      <tr><td><span class="chip t-chip">End-to-end</span></td><td>A whole real-life journey across several screens.</td></tr>
+      <tr><td><span class="chip k-chip">Known issue</span></td><td>Already found in the code review; expected to fail until fixed. Test it anyway and record what you see.</td></tr>
+      <tr><td><span class="chip n-chip">Needs DB / setup</span></td><td>Needs Prisma Studio, extra configuration or a deployed site. If you can’t do the setup, mark it <b>Blocked</b> and say why.</td></tr>
+    </table></div>
+
+    <h3>Sample data to use</h3>
+    <div class="tbl"><table>
+      <tr><th>What</th><th>Value</th></tr>
+      <tr><td>Customer 1</td><td>Priya Sundaram · phone 9876500001 · WhatsApp 9876500002 · 12/4B Raja Street, Near Temple, Chennai, Tamil Nadu 600001</td></tr>
+      <tr><td>Customer 2</td><td>Ananya Ramachandran · 9876500005 / 9876500006 · 45 Gandhi Road, Coimbatore, Tamil Nadu 641001</td></tr>
+      <tr><td>Custom request</td><td>Deepika Sundaram · 9876500010 · deepika@example.com · Full Bridal Bangle Set, 2.6, maroon with gold</td></tr>
+      <tr><td>Personalisation</td><td>Priya &amp; Karthik · wedding date a few weeks ahead</td></tr>
+      <tr><td>Coupons to create</td><td>WED10 (10%, min ₹500, public) · VIP100 (₹100 off, private, first 2 uses)</td></tr>
+      <tr><td>Razorpay test payment</td><td>UPI <span class="mono">success@razorpay</span> (works) / <span class="mono">failure@razorpay</span> (fails) · card <span class="mono">4111 1111 1111 1111</span>, any future expiry, any CVV</td></tr>
+      <tr><td>Admin login</td><td>Your owner account (the seeded admin, or the one created with <span class="mono">ADMIN_EMAIL</span>/<span class="mono">ADMIN_PASSWORD</span>)</td></tr>
+    </table></div>
+    <p class="muted">Use phone numbers starting 98765000… so test orders are easy to find and delete later. Name test products and categories starting with “TEST”.</p>
+
+    <h3>UI checks vs database checks</h3>
+    <p>Most checks are done by looking at the shop and the admin screens. Where a test needs to see stored data directly (stock movements, queued emails, staff accounts), open <b>Prisma Studio</b> with <span class="mono">npx prisma studio</span>. Those tests are tagged “Needs DB”.</p>
+
+    <h3>How serious is a bug?</h3>
+    <div class="tbl"><table>
+      <tr><th>Severity</th><th>Use it when</th><th>AVAL example</th></tr>
+      <tr><td><span class="chip sev-Critical">Critical</span></td><td>Money, customer data or ordering is broken; no workaround.</td><td>Customer can pay less than the price; another person can read an order’s address; checkout crashes.</td></tr>
+      <tr><td><span class="chip sev-Major">Major</span></td><td>An important feature fails or gives wrong results; a workaround exists.</td><td>Coupon not applied; stock not returned on cancel; admin can’t dispatch.</td></tr>
+      <tr><td><span class="chip sev-Moderate">Moderate</span></td><td>Works but confusing, inconsistent or partly wrong.</td><td>Wrong message text; filter count off; layout broken on one screen size.</td></tr>
+      <tr><td><span class="chip sev-Minor">Minor</span></td><td>Cosmetic; doesn’t stop anyone.</td><td>Typo, spacing, icon misaligned.</td></tr>
+    </table></div>
+    <p><b>Priority</b> is how soon to fix: <b>P1</b> before launch, <b>P2</b> soon after, <b>P3</b> when convenient. Usually Critical = P1, but a Minor typo on the checkout button can still be P1.</p>
+
+    <h3>Evidence</h3>
+    <p>Take a screenshot (Windows: <span class="mono">Win + Shift + S</span>) or screen recording (<span class="mono">Win + Alt + R</span> with Xbox Game Bar) for every Fail. Name files like <span class="mono">TC-034-checkout-error.png</span> and write the name in the Evidence box.</p>
+  </section>
+
+  <!-- ============================ TESTS ============================ -->
+  <section id="view-tests" data-view="tests" hidden>
+    <h2>Test cases</h2>
+    <p class="muted">In order. Open a test, follow the steps, record the result. Filters only change what you see.</p>
+    <div class="filters" role="group" aria-label="Filter test cases">
+      <label for="fPhase" class="muted" style="font-size:13px">Phase</label>
+      <select id="fPhase"></select>
+      <label for="fStatus" class="muted" style="font-size:13px">Status</label>
+      <select id="fStatus"><option value="">All</option><option>Not Tested</option><option>Pass</option><option>Fail</option><option>Blocked</option></select>
+      <label for="fType" class="muted" style="font-size:13px">Type</label>
+      <select id="fType"><option value="">All</option><option value="P">Positive</option><option value="N">Negative</option><option value="E">Edge case</option><option value="X">End-to-end</option></select>
+      <input id="fText" type="search" placeholder="Search tests" aria-label="Search tests">
+    </div>
+    <div id="testList"></div>
+  </section>
+
+  <!-- ============================ CHECKLIST ============================ -->
+  <section id="view-checklist" data-view="checklist" hidden>
+    <h2>Master checklist</h2>
+    <p class="muted">Every test at a glance. Click an ID to open it.</p>
+    <div class="tbl"><table id="checkTable"><thead><tr><th>ID</th><th>Module</th><th>Scenario</th><th>Type</th><th>Status</th><th>Remarks</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- ============================ BUGS ============================ -->
+  <section id="view-bugs" data-view="bugs" hidden>
+    <h2>Bug log</h2>
+    <p class="muted">Log each problem once, even if several tests show it. Steps should let someone else see the bug without asking you.</p>
+    <form id="bugForm" class="card bugform" autocomplete="off">
+      <label class="wide">Bug title<input id="bTitle" required maxlength="140" placeholder="e.g. Checkout accepts a 9-digit phone number"></label>
+      <label>Module<input id="bModule" maxlength="60" placeholder="Checkout"></label>
+      <label>Related test<input id="bTc" maxlength="20" placeholder="TC-034"></label>
+      <label>Environment / device<input id="bEnv" maxlength="120" placeholder="Windows 11, Chrome 131, localhost"></label>
+      <label>Severity<select id="bSev"><option>Critical</option><option>Major</option><option selected>Moderate</option><option>Minor</option></select></label>
+      <label>Priority<select id="bPri"><option>P1</option><option selected>P2</option><option>P3</option></select></label>
+      <label class="wide">Steps to reproduce<textarea id="bSteps" rows="4" placeholder="1. Open checkout&#10;2. Enter phone 987654321&#10;3. Click Confirm"></textarea></label>
+      <label class="wide">Expected result<textarea id="bExp" rows="2"></textarea></label>
+      <label class="wide">Actual result<textarea id="bAct" rows="2"></textarea></label>
+      <label>Screenshot / recording<input id="bEvid" maxlength="200" placeholder="TC-034-phone.png"></label>
+      <label>Suggested fix<input id="bFix" maxlength="300"></label>
+      <div class="wide" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button type="submit" class="primary">Log bug</button>
+        <span id="bugMsg" class="muted" role="status"></span>
+      </div>
+    </form>
+    <div class="filters" role="group" aria-label="Filter bugs">
+      <label for="bfSev" class="muted" style="font-size:13px">Severity</label>
+      <select id="bfSev"><option value="">All</option><option>Critical</option><option>Major</option><option>Moderate</option><option>Minor</option></select>
+      <label for="bfState" class="muted" style="font-size:13px">State</label>
+      <select id="bfState"><option value="">All</option><option>Open</option><option>Fixed</option><option>Retest passed</option><option>Won't fix</option></select>
+    </div>
+    <div id="bugList"></div>
+  </section>
+
+  <!-- ============================ REPORT ============================ -->
+  <section id="view-report" data-view="report" hidden>
+    <h2>Summary</h2>
+    <div class="kpis" id="kpis"></div>
+    <h3>Progress by phase</h3>
+    <div class="tbl"><table id="phaseTable"><thead><tr><th>Phase</th><th>Total</th><th>Pass</th><th>Fail</th><th>Blocked</th><th>Not tested</th></tr></thead><tbody></tbody></table></div>
+    <h3>Failed tests</h3>
+    <div id="failList" class="muted">None yet.</div>
+    <h3>Open bugs</h3>
+    <div id="openBugs" class="muted">None logged.</div>
+
+    <h2>Release readiness</h2>
+    <div class="verdict"><b>Assessment before your test pass: not ready to launch yet.</b> The core order, payment and admin flows work in testing, but several things customers or the shop rely on are missing. Re-read this after your pass and add what you found.</div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="card"><h3 style="margin-top:0">Must fix before launch</h3><ul>
+        <li>Customers get no email or WhatsApp after placing an order; emails only send when the email job is run by hand.</li>
+        <li>Contact form doesn’t send messages anywhere.</li>
+        <li>Unpaid orders hold stock forever; add automatic expiry.</li>
+        <li>Real product photos (several products share the same photo).</li>
+        <li>Privacy policy, terms and returns pages (Razorpay requires them for live keys).</li>
+        <li>Razorpay live keys and the webhook URL on the deployed site; test one real ₹1 payment and refund.</li>
+        <li>Uploads saved to the server’s disk will be lost on most cloud hosts; move to cloud storage before deploying.</li>
+        <li>Change the seeded admin password; set your real WhatsApp number in Settings.</li>
+      </ul></div>
+      <div class="card"><h3 style="margin-top:0">Should fix soon</h3><ul>
+        <li>Remove or finish the unlinked pages (/order-confirmation shows a fake order).</li>
+        <li>Refunds are manual; add a refund action or a clear checklist for staff.</li>
+        <li>Rate limits reset on restart; use a shared store in production.</li>
+        <li>No staff-management screen; staff accounts need the database.</li>
+        <li>Phone layout of the home page (sideways scroll found in the audit).</li>
+      </ul></div>
+    </div>
+    <h3>Your notes for the release decision</h3>
+    <label for="releaseNotes" class="muted" style="font-size:13px">Saved with your results.</label>
+    <textarea id="releaseNotes" rows="5" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg)" placeholder="Overall feeling, blockers you found, go / no-go."></textarea>
+  </section>
+</main>
+
+<script>
+const PHASES = __DATA__;
+const TYPE = { P: 'Positive', N: 'Negative', E: 'Edge case', X: 'End-to-end' };
+const STATUSES = ['Not Tested', 'Pass', 'Fail', 'Blocked'];
+const ALL = PHASES.flatMap((ph) => ph.cases.map((c) => ({ ...c, phase: ph.key, phaseTitle: ph.title })));
+
+let results = {};   // id -> {status, actual, evidence, remarks, updatedAt}
+let bugs = [];      // {id, num, ...}
+let notes = '';
+let db = null;
+let mode = 'loading'; // 'db' | 'local' | 'loading'
+const pending = {}; // per-doc write chain
+
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const statusOf = (id) => results[id]?.status || 'Not Tested';
+const cls = (s) => s.replace(/\s/g, '');
+
+// ---------- persistence ----------
+const LS = 'aval-handbook-v1';
+function loadLocal() {
+  try { const d = JSON.parse(localStorage.getItem(LS) || '{}'); results = d.results || {}; bugs = d.bugs || []; notes = d.notes || ''; } catch { /* storage unavailable */ }
+}
+function saveLocal() {
+  try { localStorage.setItem(LS, JSON.stringify({ results, bugs, notes })); } catch { /* ignore */ }
+}
+function queueWrite(key, fn) {
+  pending[key] = (pending[key] || Promise.resolve()).then(fn).catch((e) => {
+    setNote(e?.code === 'quota_exceeded' ? 'Storage is full — some results were not saved.' : 'A change could not be saved. Check your connection.', true);
+  });
+  return pending[key];
+}
+function setNote(text, bad) {
+  const n = $('#saveNote'); n.textContent = text; n.style.color = bad ? 'var(--fail)' : '';
+}
+
+async function saveResult(id) {
+  const body = { ...(results[id] || {}), updatedAt: new Date().toISOString() };
+  results[id] = body;
+  if (mode === 'db') await queueWrite('r:' + id, () => db.doc('results/' + id).set(body));
+  else saveLocal();
+  stamp(id); renderTotals();
+}
+async function saveNotes() {
+  if (mode === 'db') await queueWrite('notes', () => db.doc('meta/release').set({ notes, updatedAt: new Date().toISOString() }));
+  else saveLocal();
+}
+
+// ---------- rendering: tests ----------
+function caseHTML(c) {
+  const r = results[c.id] || {};
+  const st = statusOf(c.id);
+  const needs = c.needs === 'db' ? 'Needs DB' : c.needs === 'setup' ? 'Needs setup' : '';
+  return `<details class="tc" id="${c.id}" data-status="${cls(st)}">
+    <summary>
+      <span class="tc-id">${c.id}</span>
+      <span class="tc-title">${esc(c.s)}<small>${esc(c.m)}</small></span>
+      <span class="tc-chips">
+        <span class="chip t-chip">${TYPE[c.t]}</span>
+        ${c.known ? '<span class="chip k-chip">Known issue</span>' : ''}
+        ${needs ? `<span class="chip n-chip">${needs}</span>` : ''}
+        <span class="chip s-${cls(st)}" data-chip>${st}</span>
+      </span>
+    </summary>
+    <div class="tc-body">
+      <div><h4>Before you start</h4><p style="margin:0">${esc(c.pre)}</p></div>
+      <div><h4>Steps</h4><ol>${c.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>
+      <div><h4>Expected result</h4><ul>${c.exp.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>
+      ${c.known ? `<div class="known"><b>Known issue:</b> ${esc(c.known)}</div>` : ''}
+      <div class="track">
+        <div class="wide"><span class="muted" style="font-size:12px;font-weight:600">Status</span>
+          <div class="statusbtns" role="group" aria-label="Status for ${c.id}">
+            ${STATUSES.map((s) => `<button type="button" class="b-${cls(s)}" data-id="${c.id}" data-status="${s}" aria-pressed="${s === st}">${s}</button>`).join('')}
+          </div>
+        </div>
+        <label class="wide">Actual result<textarea rows="2" data-id="${c.id}" data-field="actual" id="a-${c.id}">${esc(r.actual)}</textarea></label>
+        <label>Evidence (file name)<input data-id="${c.id}" data-field="evidence" id="e-${c.id}" value="${esc(r.evidence)}" maxlength="200"></label>
+        <label>Remarks<input data-id="${c.id}" data-field="remarks" id="m-${c.id}" value="${esc(r.remarks)}" maxlength="500"></label>
+        <div class="saved" id="t-${c.id}">${r.updatedAt ? 'Saved ' + new Date(r.updatedAt).toLocaleString() : ''}</div>
+      </div>
+    </div>
+  </details>`;
+}
+
+function renderTests() {
+  const fp = $('#fPhase').value, fs = $('#fStatus').value, ft = $('#fType').value, q = $('#fText').value.trim().toLowerCase();
+  const open = new Set([...document.querySelectorAll('details.tc[open]')].map((d) => d.id));
+  $('#testList').innerHTML = PHASES.filter((ph) => !fp || ph.key === fp).map((ph) => {
+    const cs = ph.cases.filter((c) => (!fs || statusOf(c.id) === fs) && (!ft || c.t === ft) && (!q || (c.id + ' ' + c.m + ' ' + c.s + ' ' + c.steps.join(' ')).toLowerCase().includes(q)));
+    if (!cs.length) return '';
+    const done = ph.cases.filter((c) => statusOf(c.id) !== 'Not Tested').length;
+    return `<div class="phase"><div class="phase-head"><h3>${esc(ph.title)}</h3><span class="muted" style="font-size:13px">${done} of ${ph.cases.length} done</span></div>
+      <p class="phase-intro">${esc(ph.intro)}</p>${cs.map(caseHTML).join('')}</div>`;
+  }).join('') || '<p class="muted">No tests match these filters.</p>';
+  open.forEach((id) => { const d = document.getElementById(id); if (d) d.open = true; });
+}
+
+function stamp(id) {
+  const t = document.getElementById('t-' + id);
+  if (t && results[id]?.updatedAt) t.textContent = (mode === 'db' ? 'Saved ' : 'Saved on this device ') + new Date(results[id].updatedAt).toLocaleString();
+  const d = document.getElementById(id);
+  if (d) {
+    const st = statusOf(id);
+    d.dataset.status = cls(st);
+    const chip = d.querySelector('[data-chip]'); chip.className = 'chip s-' + cls(st); chip.textContent = st;
+    d.querySelectorAll('.statusbtns button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.status === st)));
+  }
+}
+
+// ---------- totals, checklist, report ----------
+function tally(list) {
+  const t = { total: list.length, Pass: 0, Fail: 0, Blocked: 0, 'Not Tested': 0 };
+  list.forEach((c) => t[statusOf(c.id)]++);
+  return t;
+}
+function renderTotals() {
+  const t = tally(ALL);
+  const pct = (n) => (100 * n / t.total).toFixed(2) + '%';
+  $('#bar').innerHTML = `<span style="width:${pct(t.Pass)};background:var(--pass)"></span><span style="width:${pct(t.Fail)};background:var(--fail)"></span><span style="width:${pct(t.Blocked)};background:var(--block)"></span>`;
+  const openBugs = bugs.filter((b) => b.state === 'Open' || !b.state);
+  $('#counts').innerHTML = `<span><b>${t.total - t['Not Tested']}</b> of ${t.total} tested</span><span><b style="color:var(--pass)">${t.Pass}</b> pass</span><span><b style="color:var(--fail)">${t.Fail}</b> fail</span><span><b style="color:var(--block)">${t.Blocked}</b> blocked</span><span><b>${openBugs.length}</b> open bugs</span>`;
+  if (!$('#view-checklist').hidden) renderChecklist();
+  if (!$('#view-report').hidden) renderReport();
+}
+function renderChecklist() {
+  $('#checkTable tbody').innerHTML = ALL.map((c) => {
+    const st = statusOf(c.id);
+    return `<tr><td><a href="#tests" data-goto="${c.id}" class="mono">${c.id}</a></td><td>${esc(c.m)}</td><td>${esc(c.s)}</td><td>${TYPE[c.t]}</td><td><span class="chip s-${cls(st)}">${st}</span></td><td>${esc(results[c.id]?.remarks || '')}</td></tr>`;
+  }).join('');
+}
+function renderReport() {
+  const t = tally(ALL);
+  const sev = (s) => bugs.filter((b) => b.severity === s && (b.state || 'Open') === 'Open').length;
+  $('#kpis').innerHTML = [
+    ['Total tests', t.total], ['Passed', t.Pass], ['Failed', t.Fail], ['Blocked', t.Blocked], ['Not tested', t['Not Tested']],
+    ['Critical bugs', sev('Critical')], ['Major bugs', sev('Major')], ['Moderate bugs', sev('Moderate')], ['Minor bugs', sev('Minor')],
+  ].map(([l, v]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  $('#phaseTable tbody').innerHTML = PHASES.map((ph) => { const p = tally(ph.cases); return `<tr><td>${esc(ph.title)}</td><td>${p.total}</td><td>${p.Pass}</td><td>${p.Fail}</td><td>${p.Blocked}</td><td>${p['Not Tested']}</td></tr>`; }).join('');
+  const failed = ALL.filter((c) => statusOf(c.id) === 'Fail');
+  $('#failList').innerHTML = failed.length ? `<div class="tbl"><table><tr><th>ID</th><th>Scenario</th><th>Actual result</th></tr>${failed.map((c) => `<tr><td><a href="#tests" data-goto="${c.id}" class="mono">${c.id}</a></td><td>${esc(c.s)}</td><td>${esc(results[c.id]?.actual || '')}</td></tr>`).join('')}</table></div>` : 'None yet.';
+  const open = bugs.filter((b) => (b.state || 'Open') === 'Open');
+  $('#openBugs').innerHTML = open.length ? `<div class="tbl"><table><tr><th>Bug</th><th>Severity</th><th>Priority</th><th>Title</th></tr>${open.map((b) => `<tr><td class="mono">BUG-${String(b.num).padStart(3, '0')}</td><td><span class="chip sev-${esc(b.severity)}">${esc(b.severity)}</span></td><td>${esc(b.priority)}</td><td>${esc(b.title)}</td></tr>`).join('')}</table></div>` : 'None logged.';
+}
+
+// ---------- bugs ----------
+function renderBugs() {
+  const fs = $('#bfSev').value, fst = $('#bfState').value;
+  const list = bugs.slice().sort((a, b) => b.num - a.num).filter((b) => (!fs || b.severity === fs) && (!fst || (b.state || 'Open') === fst));
+  $('#bugList').innerHTML = list.length ? list.map((b) => `<div class="card bug" style="margin-bottom:10px">
+      <div class="bug-head"><span><span class="mono">BUG-${String(b.num).padStart(3, '0')}</span> <b>${esc(b.title)}</b></span>
+        <span><span class="chip sev-${esc(b.severity)}">${esc(b.severity)}</span> <span class="chip t-chip">${esc(b.priority)}</span></span></div>
+      <div class="muted" style="font-size:13px">${esc(b.module)}${b.tc ? ' · ' + esc(b.tc) : ''}${b.env ? ' · ' + esc(b.env) : ''} · logged ${new Date(b.createdAt).toLocaleString()}</div>
+      ${b.steps ? `<div><b style="font-size:12px">Steps</b><pre>${esc(b.steps)}</pre></div>` : ''}
+      ${b.expected ? `<div><b style="font-size:12px">Expected</b><pre>${esc(b.expected)}</pre></div>` : ''}
+      ${b.actual ? `<div><b style="font-size:12px">Actual</b><pre>${esc(b.actual)}</pre></div>` : ''}
+      ${b.evidence ? `<div class="muted" style="font-size:13px">Evidence: ${esc(b.evidence)}</div>` : ''}
+      ${b.fix ? `<div class="muted" style="font-size:13px">Suggested fix: ${esc(b.fix)}</div>` : ''}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label class="muted" style="font-size:12px" for="st-${b.id}">State</label>
+        <select id="st-${b.id}" data-bugstate="${b.id}" style="font:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg)">
+          ${['Open', 'Fixed', 'Retest passed', "Won't fix"].map((s) => `<option${(b.state || 'Open') === s ? ' selected' : ''}>${s}</option>`).join('')}
+        </select>
+        <button type="button" class="ghost" data-bugdel="${b.id}">Delete</button>
+      </div></div>`).join('') : '<p class="muted">No bugs logged yet.</p>';
+}
+
+async function addBug(e) {
+  e.preventDefault();
+  const v = (id) => $('#' + id).value.trim();
+  if (!v('bTitle')) return;
+  const bug = {
+    num: bugs.reduce((m, b) => Math.max(m, b.num || 0), 0) + 1,
+    title: v('bTitle'), module: v('bModule'), tc: v('bTc'), env: v('bEnv'), severity: $('#bSev').value, priority: $('#bPri').value,
+    steps: v('bSteps'), expected: v('bExp'), actual: v('bAct'), evidence: v('bEvid'), fix: v('bFix'), state: 'Open', createdAt: new Date().toISOString(),
+  };
+  try {
+    if (mode === 'db') { await db.collection('bugs').add(bug); }
+    else { bugs.push({ ...bug, id: 'b' + Date.now() }); saveLocal(); renderBugs(); renderTotals(); }
+    $('#bugForm').reset(); $('#bugMsg').textContent = `Logged as BUG-${String(bug.num).padStart(3, '0')}.`;
+  } catch (err) {
+    $('#bugMsg').textContent = err?.code === 'quota_exceeded' ? 'Storage is full; delete old bugs first.' : 'Not saved. Check your connection and try again.';
+  }
+}
+
+async function setBugState(id, state) {
+  const b = bugs.find((x) => x.id === id); if (!b) return;
+  b.state = state;
+  if (mode === 'db') await queueWrite('b:' + id, () => db.doc('bugs/' + id).update({ state }));
+  else { saveLocal(); renderBugs(); renderTotals(); }
+}
+const armedDelete = new Set();
+async function deleteBug(id, btn) {
+  if (!armedDelete.has(id)) { armedDelete.add(id); btn.textContent = 'Click again to delete'; setTimeout(() => { armedDelete.delete(id); if (btn.isConnected) btn.textContent = 'Delete'; }, 4000); return; }
+  armedDelete.delete(id);
+  if (mode === 'db') await queueWrite('b:' + id, () => db.doc('bugs/' + id).delete());
+  else { bugs = bugs.filter((b) => b.id !== id); saveLocal(); renderBugs(); renderTotals(); }
+}
+
+// ---------- routing ----------
+const VIEWS = ['guide', 'tests', 'checklist', 'bugs', 'report'];
+function route() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'guide';
+  document.querySelectorAll('[data-view]').forEach((s) => (s.hidden = s.dataset.view !== v));
+  document.querySelectorAll('nav.tabs a').forEach((a) => a.setAttribute('aria-current', a.getAttribute('href') === '#' + v ? 'page' : 'false'));
+  if (v === 'checklist') renderChecklist();
+  if (v === 'report') renderReport();
+  if (v === 'bugs') renderBugs();
+}
+
+// ---------- events ----------
+document.addEventListener('click', (e) => {
+  const sb = e.target.closest('.statusbtns button');
+  if (sb) { const id = sb.dataset.id; results[id] = { ...(results[id] || {}), status: sb.dataset.status }; saveResult(id); return; }
+  const go = e.target.closest('[data-goto]');
+  if (go) {
+    e.preventDefault(); const id = go.dataset.goto;
+    $('#fPhase').value = ''; $('#fStatus').value = ''; $('#fType').value = ''; $('#fText').value = '';
+    location.hash = 'tests'; route(); renderTests();
+    const d = document.getElementById(id); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); }
+    return;
+  }
+  const del = e.target.closest('[data-bugdel]');
+  if (del) deleteBug(del.dataset.bugdel, del);
+});
+document.addEventListener('change', (e) => {
+  const f = e.target.closest('[data-field]');
+  if (f) { const id = f.dataset.id; if ((results[id]?.[f.dataset.field] || '') === f.value) return; results[id] = { ...(results[id] || {}), [f.dataset.field]: f.value }; saveResult(id); return; }
+  const bs = e.target.closest('[data-bugstate]');
+  if (bs) setBugState(bs.dataset.bugstate, bs.value);
+});
+['fPhase', 'fStatus', 'fType'].forEach((id) => $('#' + id).addEventListener('change', renderTests));
+$('#fText').addEventListener('input', renderTests);
+$('#bfSev').addEventListener('change', renderBugs);
+$('#bfState').addEventListener('change', renderBugs);
+$('#bugForm').addEventListener('submit', addBug);
+$('#releaseNotes').addEventListener('change', (e) => { notes = e.target.value; saveNotes(); });
+window.addEventListener('hashchange', route);
+
+// ---------- boot ----------
+$('#fPhase').innerHTML = '<option value="">All phases</option>' + PHASES.map((p) => `<option value="${p.key}">${esc(p.title)}</option>`).join('');
+loadLocal();
+renderTests(); renderTotals(); route();
+$('#releaseNotes').value = notes;
+
+(async () => {
+  const api = window.claude?.use ? await window.claude.use('db').catch(() => null) : null;
+  if (!api) {
+    mode = 'local';
+    setNote('Saving on this device only');
+    $('#storeBanner').innerHTML = '<div class="banner warn">Results are being saved in this browser only. Open the handbook signed in to claude.ai to keep them safely and see them on other devices.</div>';
+    renderTests(); renderTotals();
+    return;
+  }
+  db = api; mode = 'db';
+  let firstR = true, firstB = true;
+  const timer = setTimeout(() => setNote('Saved results can’t be reached yet. Changes will save when the connection returns.', true), 10000);
+  db.collection('results').onSnapshot((snap) => {
+    const next = {}; snap.docs.forEach((d) => { next[d.id] = d.data(); });
+    results = next;
+    if (!snap.metadata.fromCache) { clearTimeout(timer); setNote('All changes saved'); }
+    if (firstR) { firstR = false; renderTests(); } else { ALL.forEach((c) => {
+      // refresh fields that aren't being edited right now
+      stamp(c.id);
+      ['actual', 'evidence', 'remarks'].forEach((f) => { const el = document.getElementById({ actual: 'a-', evidence: 'e-', remarks: 'm-' }[f] + c.id); if (el && document.activeElement !== el) el.value = results[c.id]?.[f] || ''; });
+    }); }
+    renderTotals();
+  }, () => { clearTimeout(timer); setNote('Saved results are unavailable right now.', true); });
+  db.collection('bugs').onSnapshot((snap) => {
+    bugs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (!$('#view-bugs').hidden) renderBugs();
+    renderTotals();
+    if (firstB) firstB = false;
+  }, () => {});
+  db.doc('meta/release').onSnapshot((d) => {
+    notes = d.exists ? (d.data().notes || '') : '';
+    const el = $('#releaseNotes'); if (document.activeElement !== el) el.value = notes;
+  }, () => {});
+})();
+</script>

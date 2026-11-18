@@ -1,10 +1,12 @@
 'use client'
 
 import React, { Suspense, useState } from 'react'
+import { useStoreContact } from '@/context/StoreContact'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 
 function OrderPlacedContent() {
+  const store = useStoreContact()
   const searchParams = useSearchParams()
   const token = searchParams.get('token') ?? ''
   const [copied, setCopied] = useState(false)
@@ -174,8 +176,8 @@ function OrderPlacedContent() {
             }}
           >
             Need help or want to speak immediately? Call our Kanyakumari studio at{' '}
-            <a href="tel:+916381823698" style={{ color: 'var(--pr)', fontWeight: 600 }}>
-              +91 63818 23698
+            <a href={`tel:+${store.phone}`} style={{ color: 'var(--pr)', fontWeight: 600 }}>
+              {store.displayPhone(store.phone)}
             </a>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import { getSession } from '@/src/server/auth/session'
 import { requirePermission, AuthError } from '@/src/server/auth/rbac'
 import { ok, apiError } from '@/src/server/api/helpers'
+import { recalcProductRating } from '@/src/server/reviews'
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/reviews — List all reviews with filters
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 const patchSchema = z.object({
   id: z.string(),
   visible: z.boolean().optional(),
-  artisanReply: z.string().optional(),
+  artisanReply: z.string().trim().max(1000).optional(),
 })
 
 export async function PATCH(req: NextRequest): Promise<NextResponse> {
@@ -85,7 +86,8 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ success: false, error: 'Review ID required' }, { status: 400 })
 
-    await prisma.review.delete({ where: { id } })
+    const review = await prisma.review.delete({ where: { id } })
+    await recalcProductRating(review.productId)
     return ok({ deleted: true })
   } catch (error) {
     return apiError(error)
