@@ -1,0 +1,555 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>AVAL Store Pre-Launch Audit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column with a sticky section index on wide screens; findings as filterable rows */
+:root{
+  --bg:#f6f5f7; --surface:#ffffff; --fg:#1d1a22; --muted:#5f5968; --line:#e3e0e8; --accent:#6b2142;
+  --crit:#b3261e; --crit-bg:#fbe9e7; --high:#b4580a; --high-bg:#fdf0e1; --med:#8a6d00; --med-bg:#fbf5d9; --low:#2f6b4f; --low-bg:#e5f3ec; --fut:#3d5a99; --fut-bg:#e8edf8;
+  --code-bg:#f0edf3;
+  --f-display:"Space Grotesk",ui-sans-serif,system-ui,sans-serif; --f-body:"Inter",ui-sans-serif,system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141218; --surface:#1d1a23; --fg:#ece8f1; --muted:#a59fb0; --line:#322d3a; --accent:#e58ab0;
+  --crit:#ff8a80; --crit-bg:#3a1a1a; --high:#ffb870; --high-bg:#3a2612; --med:#e9cf5c; --med-bg:#332c0e; --low:#7fd3a8; --low-bg:#13301f; --fut:#9db6ff; --fut-bg:#1b2440; --code-bg:#26222d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141218; --surface:#1d1a23; --fg:#ece8f1; --muted:#a59fb0; --line:#322d3a; --accent:#e58ab0;
+  --crit:#ff8a80; --crit-bg:#3a1a1a; --high:#ffb870; --high-bg:#3a2612; --med:#e9cf5c; --med-bg:#332c0e; --low:#7fd3a8; --low-bg:#13301f; --fut:#9db6ff; --fut-bg:#1b2440; --code-bg:#26222d; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.6 var(--f-body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:40px}
+@media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr)} nav.toc{display:none}}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;font-size:13px}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:4px 0}
+nav.toc a:hover{color:var(--accent)}
+nav.toc .lbl{font:600 11px var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--fg);margin-bottom:6px}
+main{min-width:0}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:34px;font-weight:700}
+h2{font-size:24px;margin:56px 0 14px;padding-top:8px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 8px}
+p{margin:0 0 12px;max-width:72ch}
+.eyebrow{font:600 11px var(--f-display);letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.meta{color:var(--muted);font-size:13px;margin-top:8px}
+code,.mono{font-family:var(--f-mono);font-size:12.5px;background:var(--code-bg);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+a{color:var(--accent)}
+.score{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-end;margin:24px 0 8px}
+.score .big{font:700 64px/1 var(--f-display);color:var(--accent)}
+.score .big small{font-size:22px;color:var(--muted)}
+.counts{display:flex;flex-wrap:wrap;gap:10px}
+.count{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;min-width:96px}
+.count b{display:block;font:700 22px var(--f-display);font-variant-numeric:tabular-nums}
+.count span{font-size:12px;color:var(--muted)}
+.verdict{background:var(--crit-bg);color:var(--fg);border-left:4px solid var(--crit);padding:14px 18px;border-radius:6px;margin:20px 0;max-width:80ch}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+.cols ul{margin:0;padding-left:18px} .cols li{margin-bottom:6px}
+.chip{display:inline-block;font:600 11px var(--f-display);letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.s-Critical{background:var(--crit-bg);color:var(--crit)} .s-High{background:var(--high-bg);color:var(--high)} .s-Medium{background:var(--med-bg);color:var(--med)} .s-Low{background:var(--low-bg);color:var(--low)} .s-Future{background:var(--fut-bg);color:var(--fut)}
+.st{font:500 11px var(--f-body);color:var(--muted);border:1px solid var(--line);padding:1px 7px;border-radius:999px;white-space:nowrap}
+.st.v{color:var(--low);border-color:currentColor}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 16px;align-items:center}
+.filters button{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:5px 12px;border-radius:999px;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.filters button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.filters .sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+details.f{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:8px}
+details.f summary{list-style:none;cursor:pointer;padding:12px 16px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:baseline}
+details.f summary::-webkit-details-marker{display:none}
+details.f summary .id{font:500 12px var(--f-mono);color:var(--muted)}
+details.f summary .t{font-weight:600}
+details.f summary .t small{display:block;font-weight:400;color:var(--muted);font-size:12.5px;margin-top:2px}
+details.f summary .r{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+details.f[open] summary{border-bottom:1px solid var(--line)}
+.fb{padding:12px 16px 16px;display:grid;grid-template-columns:120px minmax(0,1fr);gap:6px 16px;font-size:14px}
+.fb dt{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+.fb dd{margin:0;min-width:0}
+@media (max-width:600px){.fb{grid-template-columns:minmax(0,1fr)} details.f summary{grid-template-columns:minmax(0,1fr)} details.f summary .r{justify-content:flex-start}}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 12px var(--f-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+.pass{color:var(--low);font-weight:600} .fail{color:var(--crit);font-weight:600} .untested{color:var(--muted);font-weight:600} .partial{color:var(--high);font-weight:600}
+.note{font-size:13px;color:var(--muted)}
+ol.plan>li{margin-bottom:10px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Sections">
+  <div class="lbl">Report</div>
+  <a href="#a">A. Overall assessment</a>
+  <a href="#b">B. Page-by-page</a>
+  <a href="#c">C. Functional tests</a>
+  <a href="#findings">All findings</a>
+  <a href="#d">D. UI/UX</a>
+  <a href="#e">E. Code &amp; architecture</a>
+  <a href="#f">F. Security &amp; performance</a>
+  <a href="#g">G. Missing features</a>
+  <a href="#h">H. Action plan</a>
+  <a href="#scope">Scope &amp; limits</a>
+</nav>
+
+<main>
+<div class="eyebrow">Pre-production audit · QA · UI/UX · Code</div>
+<h1>AVAL Store Pre-Launch Audit</h1>
+<p class="meta">Next.js 16.4.3 · React 19.3 · Prisma 6 on Supabase PostgreSQL · branch <code>abish</code> (with uncommitted Postgres migration) · audited 17 Nov 2026</p>
+
+<section id="a">
+<h2>A. Overall assessment</h2>
+<div class="score">
+  <div><div class="big">4<small>/10</small></div><div class="note">Overall quality</div></div>
+  <div class="counts" id="counts"></div>
+</div>
+<div class="verdict"><strong>Not ready for production.</strong> The storefront looks good and the backend design document is strong, but the live order flow (the "enquiry" flow) trusts prices sent by the browser, exposes customer addresses and phone numbers to anyone holding or guessing a link, lets anyone post chat messages as the admin, and can mark orders as paid without a payment. The checkout page also crashes on any validation error.</div>
+
+<p><strong>Maturity:</strong> late prototype / early alpha. The UI is close to design-complete; the backend has two competing order systems, one of which (the documented Order/Payment/Coupon pipeline) is not connected to the storefront at all. Much of the storefront and admin still falls back to hard-coded mock data, which hides real failures.</p>
+
+<div class="cols">
+  <div><h3>Major strengths</h3><ul>
+    <li>Distinctive, on-brand visual design with a consistent maroon/gold palette and good product photography direction.</li>
+    <li>Thoughtful backend design doc: integer paise, snapshots, idempotency keys, state machines, outbox email.</li>
+    <li>Prisma schema is well-indexed with sensible relations and audit/outbox tables.</li>
+    <li>Zod validation on most write routes; RBAC permission matrix; bcrypt (cost 12) passwords; httpOnly session cookie with DB-backed revocation.</li>
+    <li>Low-friction checkout concept (no account, WhatsApp link) fits the target customer.</li>
+    <li>TypeScript type-check passes cleanly.</li>
+  </ul></div>
+  <div><h3>Major weaknesses</h3><ul>
+    <li>Server trusts client prices in the order flow that is actually live.</li>
+    <li>Order privacy depends on a browser-only check; track-order leaks orders by partial phone match.</li>
+    <li>Admin credentials shown on the login page; development auth bypass on 8 admin APIs.</li>
+    <li>Mock data silently replaces real data across storefront and admin.</li>
+    <li>Coupons, shipping and stock are inconsistent between banner, cart, checkout and server; stock is never decremented for enquiries.</li>
+    <li>Checkout crashes on server validation errors; hydration errors on every page once the bag has items.</li>
+    <li>Half the backend (Order/Payment/pricing engine/cron) is dead code with a fake Razorpay order id.</li>
+  </ul></div>
+</div>
+</section>
+
+<section id="b">
+<h2>B. Page-by-page audit</h2>
+<p class="note">Status reflects what I could observe in the running dev server (Chromium, desktop and 375px mobile). Finding IDs link to the detailed list.</p>
+<div class="tbl"><table>
+<thead><tr><th>Page</th><th>What works</th><th>Problems</th></tr></thead>
+<tbody>
+<tr><td><code>/</code> Home</td><td>Renders from DB with fallbacks; good hero and category tiles; meta description present.</td><td>Horizontal scroll at ~1000px and at 375px (<a href="#UX-1">UX-1</a>). "key chain" test category with "0 designs" shown publicly; "1 designs" grammar (<a href="#UX-4">UX-4</a>). Banner promotes WED10 which is rejected (<a href="#FN-4">FN-4</a>). Free-shipping threshold says ₹1,500 in banner and ₹1,499 in trust bar (<a href="#FN-5">FN-5</a>). Duplicate images across products (<a href="#PF-2">PF-2</a>).</td></tr>
+<tr><td><code>/shop</code></td><td>Loads 5 DB products.</td><td>Starts from mock product list then swaps (flash of wrong data). Search is case-sensitive (<a href="#BE-6">BE-6</a>).</td></tr>
+<tr><td><code>/category/[slug]</code></td><td>Correct for <code>bridal-bangles</code>.</td><td>Header links to <code>hair-clips</code>/<code>customised</code>/<code>bridesmaid</code>, which do not exist; page then shows mock products that are not in the DB (<a href="#FN-2">FN-2</a>, <a href="#FN-3">FN-3</a>). Unknown slugs return 200 with invented title.</td></tr>
+<tr><td><code>/product/[slug]</code></td><td>Size picker, personalisation, qty, add to bag work.</td><td>Any unknown slug renders a mock Kundan set at different prices (soft 404) (<a href="#FN-3">FN-3</a>). Initial render uses mock data, so price and review count flash. "24 verified reviews" with no review list. Generic page title on every product (<a href="#UX-6">UX-6</a>).</td></tr>
+<tr><td><code>/cart</code></td><td>Qty, remove, totals update.</td><td>Hydration error (<a href="#FN-6">FN-6</a>). Coupon codes hard-coded client-side; coupon is lost at checkout (<a href="#FN-4">FN-4</a>). Promises "256-bit Secure Razorpay Payment" although no payment happens at checkout. Qty buttons have no accessible names (<a href="#UX-3">UX-3</a>).</td></tr>
+<tr><td><code>/checkout</code></td><td>Clean form, good mobile layout.</td><td><strong>Crashes</strong> on any server validation error (<a href="#FN-1">FN-1</a>). Sends client prices (<a href="#SEC-1">SEC-1</a>). Total ignores coupon and shipping. Labels not tied to inputs (<a href="#UX-3">UX-3</a>). No client-side phone/pincode validation.</td></tr>
+<tr><td><code>/order-placed</code>, <code>/o/[token]</code></td><td>Verify screen renders; chat, pay and rating UI present.</td><td>The 4-digit check is only in the browser; the API returns full details without it (<a href="#SEC-2">SEC-2</a>). Chat accepts admin-impersonated messages (<a href="#SEC-4">SEC-4</a>). Payment can be simulated (<a href="#SEC-5">SEC-5</a>). Uses <code>alert()</code> for payment confirmation.</td></tr>
+<tr><td><code>/track-order</code></td><td>Form submits; generic not-found message.</td><td>Partial-phone search leaks other customers' orders (<a href="#SEC-3">SEC-3</a>). Carrier name hard-coded.</td></tr>
+<tr><td><code>/offers</code></td><td>Visual combo card.</td><td>Combo button adds mock products and passes "Bridal Combo Set" as a personalisation name, adding a ₹200 surcharge; no bundle discount applied; advertised savings do not match item prices (<a href="#FN-8">FN-8</a>).</td></tr>
+<tr><td><code>/wishlist</code></td><td>Renders.</td><td>Always shows the same two hard-coded mock products; wishlist API unused (<a href="#FN-9">FN-9</a>).</td></tr>
+<tr><td><code>/account</code></td><td>—</td><td>Only redirects to track-order after 1.5s; customer register/login/address APIs exist but have no UI (<a href="#PR-2">PR-2</a>).</td></tr>
+<tr><td><code>/custom-order</code></td><td>Form posts to API.</td><td>Not submitted during audit (would write to DB). Emails embed unescaped user input (<a href="#SEC-10">SEC-10</a>). No file/photo upload despite copy asking for photos.</td></tr>
+<tr><td><code>/about</code>, <code>/faq</code>, <code>/shipping</code>, <code>/contact</code></td><td>Load with 200.</td><td>Content pages not reviewed in depth; shipping terms should be reconciled with <a href="#FN-5">FN-5</a>.</td></tr>
+<tr><td><code>/admin/login</code></td><td>Clean card layout.</td><td>Displays admin email and password and a one-click "Quick Sign-in as Admin" (<a href="#SEC-6">SEC-6</a>).</td></tr>
+<tr><td><code>/admin/*</code></td><td>Responsive sidebar; enquiries board; products CRUD UI.</td><td>Pages render to logged-out visitors, showing invented revenue/orders labelled "Live from MySQL" (<a href="#FN-7">FN-7</a>). Orders, dashboard and reports read the unused Order table (<a href="#BE-1">BE-1</a>). Failed API calls are swallowed. Authenticated admin flows not exercised (see scope).</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="c">
+<h2>C. Functional testing report</h2>
+<div class="tbl"><table>
+<thead><tr><th>Test</th><th>Result</th><th>Evidence</th></tr></thead>
+<tbody>
+<tr><td>All 24 storefront and admin routes return a page</td><td class="pass">Pass</td><td>All 200; unknown route 404. But unknown product/category also 200 (soft 404).</td></tr>
+<tr><td>TypeScript type-check</td><td class="pass">Pass</td><td><code>tsc --noEmit</code> clean.</td></tr>
+<tr><td>ESLint</td><td class="fail">Fail</td><td>3 errors, 24 warnings (setState in effect, missing deps, raw &lt;img&gt;).</td></tr>
+<tr><td>Add to bag from product page</td><td class="pass">Pass</td><td>Item appears in bag with size.</td></tr>
+<tr><td>Bag persists across reload</td><td class="partial">Partial</td><td>Persists via localStorage, but triggers React hydration error.</td></tr>
+<tr><td>Coupon WED10 (advertised)</td><td class="fail">Fail</td><td>"Invalid coupon code" in cart; API also rejects.</td></tr>
+<tr><td>Coupon AVALWEDDING carried to checkout</td><td class="fail">Fail</td><td>Checkout total remained ₹1,899.</td></tr>
+<tr><td>Checkout with invalid phone/pincode</td><td class="fail">Fail</td><td>API 400 returns an array; page throws "Objects are not valid as a React child" and crashes.</td></tr>
+<tr><td>Checkout happy path → enquiry → pay → chat → rating</td><td class="untested">Not run</td><td>Creates DB records; held back per your no-DB-writes rule.</td></tr>
+<tr><td>Header category navigation</td><td class="fail">Fail</td><td>2 of 3 category links point to slugs not in DB; mock products shown.</td></tr>
+<tr><td>Product search case-insensitivity</td><td class="fail">Fail</td><td><code>search=Kundan</code> → 1, <code>search=KUNDAN</code> → 0.</td></tr>
+<tr><td>Unknown product slug</td><td class="fail">Fail</td><td>Renders an invented product instead of 404.</td></tr>
+<tr><td>Track order, not found</td><td class="pass">Pass</td><td>Generic 404 message.</td></tr>
+<tr><td>Admin pages without login</td><td class="fail">Fail</td><td>Dashboard and orders render with mock data, no redirect.</td></tr>
+<tr><td>Admin APIs without login</td><td class="fail">Fail</td><td><code>/api/admin/products</code> and <code>/api/admin/enquiries</code> return data (dev bypass). <code>/api/admin/orders</code> correctly 401.</td></tr>
+<tr><td>Login with invalid email</td><td class="partial">Partial</td><td>Returns 422 with full regex in response; generic 401 for wrong password (good).</td></tr>
+<tr><td>Cron endpoints without secret</td><td class="pass">Pass</td><td>401.</td></tr>
+<tr><td>Mobile layout 375px</td><td class="partial">Partial</td><td>Checkout and admin fit; home overflows by 19px.</td></tr>
+<tr><td>Admin login, CRUD, uploads, order status, reports</td><td class="untested">Not run</td><td>Login writes a session row; held back. Reviewed in code only.</td></tr>
+<tr><td>Razorpay, email outbox, webhooks</td><td class="untested">Not run</td><td>Needs external services; reviewed in code.</td></tr>
+<tr><td>Firefox, Safari, Edge</td><td class="untested">Not run</td><td>Only a Chromium browser was available.</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="findings">
+<h2>All findings</h2>
+<p>Each finding is tagged <span class="st v">Verified</span> when I reproduced it in the running app or by a read-only API call, <span class="st">Code review</span> when it is clear from the source but I did not execute it, or <span class="st">Risk</span> when it depends on deployment.</p>
+<div class="filters" role="group" aria-label="Filter findings">
+  <button type="button" data-f="sev" data-v="all" aria-pressed="true">All</button>
+  <button type="button" data-f="sev" data-v="Critical" aria-pressed="false">Critical</button>
+  <button type="button" data-f="sev" data-v="High" aria-pressed="false">High</button>
+  <button type="button" data-f="sev" data-v="Medium" aria-pressed="false">Medium</button>
+  <button type="button" data-f="sev" data-v="Low" aria-pressed="false">Low</button>
+  <span class="sep" aria-hidden="true"></span>
+  <button type="button" data-f="ver" data-v="Verified" aria-pressed="false">Verified only</button>
+</div>
+<div id="list"></div>
+</section>
+
+<section id="d">
+<h2>D. UI/UX improvement report</h2>
+<h3>Visual consistency</h3>
+<p>The palette (maroon <code>--pr</code>, cream backgrounds, gold accents) and the serif display face are applied consistently, and the brand feels premium. The weaknesses come from implementation: 1,343 inline <code>style={{}}</code> objects mean spacing, font sizes and radii drift page to page (for example 32px, 34px and 28px page titles; 11px–15px body text). Emoji are used as icons next to SVG icons (🌸 📦 💎 vs line icons in the header), which mixes two visual languages. Move to a small set of shared components (Button, Input, Field, Card, Badge, SectionHeader) driven by the existing CSS variables in <code>globals.css</code>, and replace emoji with the same line-icon set.</p>
+<h3>User experience</h3>
+<ul>
+  <li><strong>Trust copy contradicts behaviour.</strong> Cart promises Razorpay payment; checkout actually sends an enquiry and payment happens later after a chat. Say so plainly on the cart ("Place order now, pay by UPI after we confirm your design").</li>
+  <li><strong>Prices change between steps.</strong> Coupon and shipping disappear at checkout. Show one order summary computed by the server at every step.</li>
+  <li><strong>Navigation duplicates.</strong> "Track Order" appears twice in the desktop header; "Customised" vs "Custom Order" are easy to confuse. Merge into "Personalised" (catalogue) and "Design Your Own" (request).</li>
+  <li><strong>Desktop header is cramped at laptop widths</strong> (labels wrap onto two lines at ~1000px). Collapse to the mobile drawer earlier or shorten labels.</li>
+  <li><strong>Empty/test data is public</strong>: the "key chain" category with 0 items. Hide categories with no active products.</li>
+  <li><strong>Error handling</strong>: errors should name the field ("Enter a 10-digit WhatsApp number"), not show a crash or a generic message.</li>
+  <li><strong>Account page</strong> auto-redirects after 1.5s, which is disorienting. Either remove the link or make it a clear "Find my order" page.</li>
+</ul>
+<h3>Responsive design</h3>
+<p>Mobile checkout and admin orders lay out well. The home page overflows horizontally on both ~1000px desktop (category tiles) and 375px mobile (drawer and hero), producing a sideways scroll. The mobile bottom nav covers the end of long pages; add bottom padding equal to its height plus <code>env(safe-area-inset-bottom)</code>. 21 tap targets on the mobile home page are under 32px.</p>
+<h3>Accessibility</h3>
+<ul>
+  <li>Form labels are not associated with inputs (<code>&lt;label&gt;</code> without <code>htmlFor</code>), so screen readers announce placeholders like "9876543210" as the field name.</li>
+  <li>Quantity buttons "−" and "+" have no accessible names; add <code>aria-label="Decrease quantity"</code>.</li>
+  <li><code>.input</code> sets <code>outline:none</code> and relies on a border colour change; the global <code>:focus-visible</code> rule helps, but verify every custom control keeps a visible ring.</li>
+  <li>Decorative emoji should carry <code>aria-hidden="true"</code>.</li>
+  <li>Payment confirmation uses <code>alert()</code>; use an in-page status message with <code>role="status"</code>.</li>
+  <li>Colour contrast of grey helper text on cream (<code>--tx2</code>) should be checked against WCAG AA 4.5:1.</li>
+</ul>
+</section>
+
+<section id="e">
+<h2>E. Code &amp; architecture review</h2>
+<h3>Structure</h3>
+<ul>
+  <li><strong>Two order systems.</strong> <code>src/server/orders/checkout.ts</code>, <code>src/server/pricing/engine.ts</code>, <code>/api/checkout/place</code>, <code>/api/payments/verify</code>, <code>/api/webhooks/razorpay</code>, coupons and cron operate on <code>Order</code>; the storefront uses <code>Enquiry</code>. Admin Orders, Dashboard and Reports read <code>Order</code>, so they will always be empty for real customers. Pick one model. Recommended: keep the enquiry UX, but on enquiry creation price it with <code>priceCart</code> and persist through the <code>Order</code>/<code>OrderItem</code> tables (with a status for "awaiting confirmation"), so stock, coupons, reports and snapshots all work.</li>
+  <li><strong>Mock data as fallback</strong> (<code>lib/data.ts</code> imported by 11 files). It hides API failures and lets customers order products that do not exist. Remove it from runtime code; keep it only in the seed script.</li>
+  <li><strong>Pages are very large</strong> (<code>app/o/[token]/page.tsx</code> 878 lines, <code>app/admin/products/page.tsx</code> 838). Split into components and hooks; product-mapping code is copy-pasted in shop, category and product pages. Add one <code>toProductView()</code> mapper.</li>
+  <li><strong>Client-rendered catalogue.</strong> Product and category pages are client components that fetch after load. Make them server components that query Prisma directly, return <code>notFound()</code> for unknown slugs and export <code>generateMetadata</code>.</li>
+  <li><strong>Inconsistent API contracts.</strong> Some routes return <code>{success,data}</code>, enquiry routes return raw objects or <code>{error: ZodIssue[]}</code>. Use the existing <code>ok()/apiError()</code> helpers everywhere and always return a string <code>error</code> plus optional <code>fieldErrors</code>.</li>
+  <li><strong>Business constants duplicated</strong>: ₹200 personalisation charge in 3 places, shipping rules in 3 places with different values. Read from <code>Setting</code> on the server only.</li>
+  <li><strong>No middleware/proxy</strong> protecting <code>/admin</code>; the admin layout is a client component with no redirect.</li>
+  <li><strong>Repo hygiene</strong>: 4 MB design mockup HTML in the root, 4.1 MB of prototype HTML served publicly from <code>public/extracted</code>, a stray JPG in the root, README is the create-next-app template, <code>.env.example</code> still describes MySQL and lacks <code>DIRECT_URL</code>, <code>mysql2</code> still a dependency, ad-hoc test scripts without a runner.</li>
+</ul>
+<h3>Database</h3>
+<ul>
+  <li><strong>Migration history replaced</strong> (uncommitted): the two MySQL migrations are deleted and a new <code>init_postgresql</code> added. Fine for a fresh project, but commit it as one deliberate change and never apply it against an existing MySQL DB.</li>
+  <li><code>Enquiry.items</code> is JSON with no product foreign key or stock movement: stock is never decremented for the live flow. Product snapshots should be stored, but alongside real <code>productId</code> references.</li>
+  <li><code>Order.orderNumber</code> uses 5 random digits: collisions become likely after a few hundred orders (unique-constraint 500) and numbers are guessable. Use a DB sequence or 8+ char random IDs.</li>
+  <li><code>Order.couponCode</code> is a free string; the per-customer limit in <code>Coupon.perCustomerLimit</code> is never enforced; usage limit is checked outside the transaction (race).</li>
+  <li>Redundant <code>@@index</code> on columns that are already <code>@unique</code> (<code>email</code>, <code>slug</code>, <code>token</code>, <code>orderNumber</code>, <code>code</code>).</li>
+  <li><code>Product.rating</code>/<code>reviewCount</code> are denormalised but nothing recalculates them when reviews are approved.</li>
+  <li>Backups: Supabase daily backups depend on plan; document a point-in-time recovery plan before launch.</li>
+</ul>
+</section>
+
+<section id="f">
+<h2>F. Security &amp; performance report</h2>
+<p>Security findings are detailed in the list above under the <code>SEC-</code> IDs. Summary of the attack paths that matter most:</p>
+<ol>
+  <li><strong>Pay ₹1 for any order</strong>: post an enquiry with <code>unitPaise: 100</code> (SEC-1), then pay through the normal Razorpay flow; the webhook confirms it without checking the amount (SEC-7).</li>
+  <li><strong>Read other customers' addresses</strong>: send <code>{"query":"98"}</code> to <code>/api/track-order</code> to get a token (SEC-3), then <code>GET /api/enquiries/&lt;token&gt;</code> (SEC-2).</li>
+  <li><strong>Phish a customer as the shop</strong>: post <code>senderType: "ADMIN"</code> messages with a payment link into their order chat (SEC-4).</li>
+  <li><strong>Log in as owner</strong> if the seed admin exists in production (SEC-6).</li>
+</ol>
+<h3>Performance</h3>
+<ul>
+  <li>Product images are ~800–900 KB JPEGs served with raw <code>&lt;img&gt;</code>; switch to <code>next/image</code> with sizes, or pre-compress to WebP/AVIF at ~150 KB. Three products share one identical file and two others share another.</li>
+  <li>Catalogue pages render mock HTML on the server and refetch on the client: double work, layout shift and wrong prices for crawlers. Server components fix this.</li>
+  <li>Chat SSE polls the database every 1.5 s per open tab, holds a connection open indefinitely (incompatible with serverless timeouts) and can drop messages created between the query and the timestamp update. Use Supabase Realtime, or poll with the last message id as cursor.</li>
+  <li>The 4 MB prototype HTML under <code>public/extracted</code> is deployable and indexable.</li>
+  <li>Core Web Vitals were not measured: only a dev server was running and a production build was not attempted.</li>
+</ul>
+</section>
+
+<section id="g">
+<h2>G. Missing features &amp; product improvements</h2>
+<h3>Essential before launch</h3>
+<ul>
+  <li><strong>Server-side pricing for enquiries</strong>, including coupons and shipping, shown identically in cart, checkout and the order page.</li>
+  <li><strong>Stock reservation</strong> on order and release on cancellation.</li>
+  <li><strong>Notifications</strong>: the checkout promises a WhatsApp link, but nothing sends WhatsApp or SMS, and enquiry creation queues no email. Customers who close the tab lose their only link. At minimum show the link prominently with a copy button and queue an email/SMS.</li>
+  <li><strong>Admin authentication guard</strong> and a real admin user management screen (change password, add staff).</li>
+  <li><strong>Error and empty states</strong> instead of mock fallbacks; a real 404 for products.</li>
+  <li><strong>Legal pages</strong>: privacy policy, terms, returns/refunds (required by Razorpay onboarding and Indian consumer rules).</li>
+</ul>
+<h3>Valuable improvements</h3>
+<ul>
+  <li>Photo upload on custom orders (the copy asks for saree photos; the form has no upload).</li>
+  <li>Reviews shown on product pages once approved, with the count computed from approved reviews.</li>
+  <li>Admin notification (email or push) on new enquiry and new chat message.</li>
+  <li>Product variants for size-specific stock if sizes sell out independently.</li>
+  <li>GST invoice generation once tax settings are confirmed with an accountant.</li>
+</ul>
+</section>
+
+<section id="h">
+<h2>H. Prioritised action plan</h2>
+<p class="note">Grouped by priority; each item references the detailed finding. Suggested order inside each group is top to bottom.</p>
+<div id="plan"></div>
+</section>
+
+<section id="scope">
+<h2>Scope &amp; limits</h2>
+<ul>
+  <li><strong>Read-only audit.</strong> No source files, database records, configuration or packages were changed. I did not log in to the admin (it writes a session row) or submit a valid order, custom order or review, because each would write to the Supabase database.</li>
+  <li>Write-path findings (price tampering, webhook, coupon races, upload) come from code review and are marked as such. They are straightforward to confirm with one test enquiry if you allow it.</li>
+  <li>Only Chromium was available, so Firefox, Safari and Edge are untested. Performance numbers come from a dev server, not a production build.</li>
+  <li>Secrets in <code>.env</code> were not read (values redacted while inspecting). <code>.env</code> is correctly git-ignored.</li>
+</ul>
+</section>
+</main>
+</div>
+
+<script>
+const F = [
+// ---------- Security
+{id:"SEC-1",sev:"Critical",ver:"Code review",area:"Security",page:"POST /api/enquiries · app/api/enquiries/route.ts",title:"Order total is computed from prices the browser sends",
+ steps:"POST /api/enquiries with items:[{productId:'any', productName:'Kundan set', qty:1, unitPaise:100}].",
+ expected:"Server looks up each product, rejects unknown/archived ids and computes the price itself.",
+ actual:"totalPaise = sum(unitPaise × qty) from the request. productId and productName are not checked against the DB. The customer then pays that amount through /pay.",
+ fix:"Accept only productId, size, qty, customisation. Load products with Prisma and price with priceCart() from src/server/pricing/engine.ts; store snapshots from the DB row."},
+{id:"SEC-2",sev:"Critical",ver:"Code review",area:"Security",page:"GET /api/enquiries/[token] · app/o/[token]/page.tsx",title:"Order privacy check exists only in the browser",
+ steps:"Call GET /api/enquiries/<token> directly, skipping the 4-digit screen.",
+ expected:"API refuses until the last-4 digits have been verified for this browser.",
+ actual:"verify returns {verified:true} and the client sets sessionStorage; GET, messages, stream and pay never check it, so the token alone exposes name, phone, WhatsApp, full address and chat. verify has no rate limit (10,000 combinations).",
+ fix:"On successful verify, set an httpOnly signed cookie scoped to the token (or return a short-lived JWT). Require it in GET, messages, stream, pay and rating. Rate-limit verify (e.g. 5 tries / 15 min per token and per IP). Generate tokens with crypto.randomBytes."},
+{id:"SEC-3",sev:"Critical",ver:"Code review",area:"Security",page:"POST /api/track-order",title:"Track-order returns other customers' orders on partial phone match",
+ steps:"POST {query:'98'}.",
+ expected:"Only an exact order reference plus matching phone/email returns an order.",
+ actual:"Uses customerPhone/customerWhatsapp 'contains' and returns the first match with its private token (redirect) and customer name. Orders are also returned by 5-digit order number alone with item details.",
+ fix:"Require two factors with exact match (token or order number AND full phone or email). Return only a status summary; never the token. Add rate limiting."},
+{id:"SEC-4",sev:"Critical",ver:"Code review",area:"Security",page:"POST /api/enquiries/[token]/messages",title:"Anyone can post chat messages as the admin",
+ steps:"POST {senderType:'ADMIN', body:'Pay here: …'} to any token.",
+ expected:"senderType is derived from the session; only staff can send ADMIN messages.",
+ actual:"senderType is accepted from the request body. The admin panel itself uses this public endpoint.",
+ fix:"Public route always stores CUSTOMER (after SEC-2 verification). Add /api/admin/enquiries/[token]/messages that requires orders:update_status and stores ADMIN."},
+{id:"SEC-5",sev:"Critical",ver:"Code review",area:"Security",page:"POST /api/enquiries/[token]/pay",title:"Payment is simulated whenever Razorpay keys are missing",
+ steps:"Deploy with RAZORPAY_KEY_ID unset or containing 'placeholder', then click Pay.",
+ expected:"Payment endpoint fails closed; simulation only in an explicit test mode.",
+ actual:"Marks the enquiry PAID and CONFIRMED with a fake payment id. No NODE_ENV or flag guard.",
+ fix:"Remove the simulation, or gate it behind an explicit PAYMENTS_SIMULATE=true that the server refuses to honour when NODE_ENV=production. Fail with 503 if keys are missing."},
+{id:"SEC-6",sev:"Critical",ver:"Verified",area:"Security",page:"/admin/login · scripts/seed-fresh.ts",title:"Admin email and password are printed on the login page",
+ steps:"Open /admin/login.",
+ expected:"No credentials or one-click login in any deployable build.",
+ actual:"Footer shows the owner email and password; 'Quick Sign-in as Admin' logs in with them. The same password is in seed-fresh.ts. (This is in your uncommitted changes.)",
+ fix:"Remove handleQuickLogin and the credential text. Seed the admin from env vars (ADMIN_EMAIL, ADMIN_PASSWORD) and force a password change on first login. Rotate the password if this DB is ever used in production."},
+{id:"SEC-7",sev:"Critical",ver:"Code review",area:"Security",page:"POST /api/webhooks/razorpay-enquiry",title:"Enquiry webhook can be forged and never checks the amount",
+ steps:"Leave RAZORPAY_WEBHOOK_SECRET empty, or pay a lower amount (SEC-1).",
+ expected:"Signature always required (timing-safe), amount and order id match the enquiry, cancelled enquiries are not revived, duplicates ignored.",
+ actual:"Signature check is skipped when the secret is empty and uses !== (not timing-safe). Enquiry is found via payment notes, amount and razorpayOrderId are not compared, status is set to CONFIRMED even if CANCELLED.",
+ fix:"Fail when the secret is missing; use crypto.timingSafeEqual; look up by razorpayOrderId; compare amount to totalPaise; only transition ENQUIRY→CONFIRMED; record the event id for idempotency."},
+{id:"SEC-8",sev:"High",ver:"Verified",area:"Security",page:"8 routes under /api/admin (products, categories, enquiries, upload)",title:"Admin APIs skip authentication in development mode",
+ steps:"With the dev server running, GET /api/admin/products or /api/admin/enquiries with no cookie.",
+ expected:"401 regardless of environment.",
+ actual:"Returns data. Any device on your network can read and edit products, change enquiry status and upload files while the dev server runs; a deployment with NODE_ENV=development would be fully open.",
+ fix:"Delete the `else if (process.env.NODE_ENV !== 'development')` branches; use one requireAdmin(permission) helper that always throws AuthError without a session."},
+{id:"SEC-9",sev:"High",ver:"Code review",area:"Security",page:"POST /api/admin/upload",title:"File upload accepts any type and size and keeps the user's extension",
+ steps:"Upload evil.html or an SVG with script.",
+ expected:"Only jpg/png/webp under a size limit, content-sniffed, renamed.",
+ actual:"Writes any file to public/uploads with its original extension; served from the same origin, which enables stored XSS against admins. Local disk also does not persist on serverless hosts.",
+ fix:"Allowlist MIME by magic bytes, cap at ~5 MB, force extension from detected type, store in Supabase Storage (private bucket or signed URLs)."},
+{id:"SEC-10",sev:"High",ver:"Code review",area:"Security",page:"POST /api/custom-orders",title:"User input is inserted unescaped into email HTML",
+ steps:"Submit a custom order with HTML in name or description.",
+ expected:"Escaped text in emails.",
+ actual:"Template literals put body.name, description etc. directly into htmlBody sent to the customer and to the shop.",
+ fix:"Escape with a small escapeHtml() helper or render emails with a template library."},
+{id:"SEC-11",sev:"High",ver:"Verified",area:"Security",page:"package.json",title:"Next.js 16.4.3 has a known security vulnerability",
+ steps:"Open any page; Next dev overlay shows a Security Insight.",
+ expected:"Patched framework version.",
+ actual:"Overlay: 'Next.js 16.4.3 is affected by a known security vulnerability'.",
+ fix:"Upgrade to the patched 16.x release (the overlay suggests `next upgrade --agent=security`). Re-run lint and a build afterwards."},
+{id:"SEC-12",sev:"High",ver:"Code review",area:"Security",page:"All public write and auth routes",title:"No rate limiting anywhere",
+ steps:"Script repeated calls to /api/auth/login, /verify, /track-order, /api/enquiries, /api/custom-orders, /api/reviews.",
+ expected:"Throttling per IP and per identifier.",
+ actual:"Unlimited. Enables password guessing, 4-digit brute force, order spam and email-outbox flooding.",
+ fix:"Add a Postgres-backed or Upstash rate limiter in a shared helper or in proxy.ts."},
+{id:"SEC-13",sev:"Medium",ver:"Code review",area:"Security",page:"src/server/auth/session.ts",title:"Hard-coded JWT secret fallback",
+ steps:"Start without JWT_SECRET.",
+ expected:"App refuses to start.",
+ actual:"Falls back to a constant string, so tokens could be forged.",
+ fix:"Throw at startup if JWT_SECRET is missing or shorter than 32 bytes. Store a hash of the session token rather than the token itself; purge expired sessions."},
+{id:"SEC-14",sev:"Medium",ver:"Verified",area:"Security",page:"next.config.ts",title:"No security headers",
+ steps:"curl -I http://localhost:3000/",
+ expected:"CSP, frame-ancestors/X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS in production.",
+ actual:"Only X-Powered-By: Next.js.",
+ fix:"Add headers() in next.config.ts; set poweredByHeader:false."},
+{id:"SEC-15",sev:"Medium",ver:"Code review",area:"Security",page:"POST /api/admin/settings · /api/admin/promotions",title:"Settings and promotion values are not validated",
+ steps:"Save taxMode='abc' or a 150% promotion.",
+ expected:"Zod schema with allowed keys and ranges.",
+ actual:"Any key/value saved; valueBp has no upper bound, so totals can go negative and pricing throws 500.",
+ fix:"Define a settings schema; cap PERCENT at 10000 bp and FIXED at the item price."},
+{id:"SEC-16",sev:"Low",ver:"Code review",area:"Security",page:"/api/cron/*",title:"Cron secret accepted in the query string",
+ steps:"Call ?secret=…",expected:"Header only (logs keep URLs).",actual:"Query string accepted.",fix:"Accept only the Authorization header (Vercel cron sends Bearer CRON_SECRET); use timing-safe compare."},
+// ---------- Functional
+{id:"FN-1",sev:"Critical",ver:"Verified",area:"Functional",page:"/checkout · app/(storefront)/checkout/page.tsx",title:"Checkout page crashes on any validation error",
+ steps:"Add an item, open checkout, enter a 5-digit phone or 2-digit pincode, submit.",
+ expected:"Inline message next to the field.",
+ actual:"API returns {error:[ZodIssue…]}; setError(array) renders objects and React throws 'Objects are not valid as a React child'. The page dies (white screen in production).",
+ fix:"Validate on the client (pattern, length) before submit; have the API return a string error plus fieldErrors; render only strings."},
+{id:"FN-2",sev:"High",ver:"Verified",area:"Functional",page:"components/storefront/Header.tsx, Footer.tsx",title:"Category links point to slugs that do not exist",
+ steps:"Click Hair Accessories or Customised in the header.",
+ expected:"Products from hair-accessories / customised-sets.",
+ actual:"Links go to hair-clips, customised, bridesmaid; API returns 0 products and the page shows mock products.",
+ fix:"Build the nav from /api/categories (or the DB in the server layout) instead of hard-coded slugs."},
+{id:"FN-3",sev:"High",ver:"Verified",area:"Functional",page:"/product/[slug], /category/[slug], /shop, /offers, /wishlist",title:"Mock catalogue data shown as real products",
+ steps:"Open /product/does-not-exist or /category/hair-clips.",
+ expected:"404 for unknown product; empty state for empty category.",
+ actual:"Unknown product renders a mock Kundan set at ₹1,899/₹2,499 with '128 verified reviews' (DB has ₹1,899/₹2,899, 24 reviews). Empty categories show mock items with ids like prod-1 that can be added to the bag and ordered.",
+ fix:"Remove lib/data.ts imports from runtime pages; render catalogue in server components; call notFound(); show a real empty state."},
+{id:"FN-4",sev:"High",ver:"Verified",area:"Functional",page:"AnnouncementBar · CartContext · checkout",title:"Coupons: advertised code rejected, applied code lost at checkout",
+ steps:"Apply WED10 (from the banner) → rejected. Apply AVALWEDDING → accepted in cart. Go to checkout.",
+ expected:"Banner code works; discount shown at checkout and charged.",
+ actual:"Cart accepts only three hard-coded codes (₹300/₹500 flat). Checkout total stays ₹1,899 because coupon is neither persisted nor sent. DB coupons created in admin are never used by the storefront.",
+ fix:"Validate coupons through the server (/api/coupons/check or priceCart) and send couponCode with the enquiry so the server applies it."},
+{id:"FN-5",sev:"High",ver:"Verified",area:"Functional",page:"Banner, home trust bar, CartContext, pricing engine",title:"Shipping rules differ in four places",
+ steps:"Compare copy and code.",
+ expected:"One threshold and fee from settings.",
+ actual:"Banner ₹1,500; trust bar ₹1,499; cart free above ₹1,499 else ₹99; server engine default free above ₹500 else ₹80; enquiry total charges no shipping at all.",
+ fix:"Store threshold and fee in Setting; read them server-side for pricing and copy."},
+{id:"FN-6",sev:"High",ver:"Verified",area:"Functional",page:"context/CartContext.tsx · Header",title:"Hydration error on every page once the bag has items",
+ steps:"Add an item, reload any page, check console.",
+ expected:"No hydration mismatch.",
+ actual:"useState initialiser reads localStorage; server renders an empty bag badge, client renders a count. React regenerates the tree.",
+ fix:"Start with [] and load from localStorage in useEffect (or useSyncExternalStore), rendering the badge after mount."},
+{id:"FN-7",sev:"High",ver:"Verified",area:"Functional",page:"/admin, /admin/orders, /admin/customers",title:"Admin shows invented data and is reachable when logged out",
+ steps:"Open /admin in a fresh browser.",
+ expected:"Redirect to /admin/login; real data or an error.",
+ actual:"Dashboard shows '₹1,48,250 Live from MySQL', '38 orders' and mock customers with phone numbers; failed fetches are swallowed with .catch(()=>{}). Customers API fills missing phone/city/wedding date with fake defaults.",
+ fix:"Add a server-side guard (proxy.ts or a server layout calling getSessionUser and redirecting). Initialise lists empty, show loading/error states, remove fake defaults."},
+{id:"FN-8",sev:"Medium",ver:"Code review",area:"Functional",page:"/offers",title:"Combo deal adds mock products with a ₹200 personalisation charge",
+ steps:"Click the combo CTA.",
+ expected:"Both real products at the advertised combo price.",
+ actual:"Calls addItem(PRODUCTS[0], '2.6', 'Bridal Combo Set') – the third argument is the personalisation name, so ₹200 is added; no bundle price is applied; 'Save ₹1,099' does not match item prices.",
+ fix:"Model combos as Promotion type COMBO in the DB and price them on the server."},
+{id:"FN-9",sev:"Medium",ver:"Code review",area:"Functional",page:"/wishlist",title:"Wishlist is hard-coded",
+ steps:"Open /wishlist.",expected:"The visitor's saved items.",actual:"Always PRODUCTS[0] and PRODUCTS[3]; header heart has no add action on product pages.",fix:"Either remove the feature for launch or store wishlist in localStorage (guest) and the existing API for logged-in users."},
+{id:"FN-10",sev:"Medium",ver:"Code review",area:"Functional",page:"POST /api/quotes/[token]",title:"Quotes can be accepted in any state",
+ steps:"Decline a quote, then accept it.",expected:"Only QUOTE_SENT can move to ACCEPTED/DECLINED.",actual:"Any status, including already declined or in production, is overwritten.",fix:"Use a conditional update where status = 'QUOTE_SENT'."},
+{id:"FN-11",sev:"Medium",ver:"Code review",area:"Functional",page:"PATCH /api/admin/enquiries/[token]/status",title:"Enquiry status can jump anywhere, regardless of payment",
+ steps:"Set DELIVERED on an unpaid enquiry, or move DELIVERED back to MAKING.",expected:"Allowed transitions only; dispatch only when paid.",actual:"Any of 5 statuses at any time.",fix:"Add a transition map like the one in /api/admin/orders and check paymentStatus before DISPATCHED."},
+{id:"FN-12",sev:"Low",ver:"Verified",area:"Functional",page:"POST /api/auth/login",title:"Login validation leaks schema details",
+ steps:"Send a malformed email.",expected:"Generic 'Invalid email or password'.",actual:"422 with the full Zod email regex.",fix:"Return generic messages for auth routes."},
+// ---------- Backend / data
+{id:"BE-1",sev:"High",ver:"Code review",area:"Backend",page:"src/server/orders/checkout.ts and related routes",title:"Documented order pipeline is disconnected and could not take payments",
+ steps:"Trace storefront checkout.",expected:"One order model used end to end.",
+ actual:"Storefront creates Enquiry rows. The Order pipeline is unused; placeOrder creates a fake providerOrderId 'rzp_order_<hex>' instead of calling Razorpay, so verify/webhook could never match. Admin Orders, Dashboard and Reports read the empty Order table.",
+ fix:"Choose one model (see section E) and delete the other routes."},
+{id:"BE-2",sev:"High",ver:"Code review",area:"Backend",page:"Enquiry flow",title:"Stock is never reserved or decremented for real orders",
+ steps:"Place more enquiries than stock.",expected:"Stock reserved on order, committed on payment, released on cancel.",actual:"Enquiry has no stock logic; products can be oversold.",fix:"Reuse the conditional UPDATE from placeOrder inside the enquiry transaction."},
+{id:"BE-3",sev:"Medium",ver:"Code review",area:"Backend",page:"applyPaymentCaptured",title:"Payment capture lacks amount, state and lock checks",
+ steps:"Late webhook after cron cancelled the order.",expected:"Refund queued, order stays cancelled.",actual:"Order becomes PAID/PROCESSING after its stock was released; amount not compared; no row lock.",fix:"SELECT … FOR UPDATE, compare amount, refuse when CANCELLED."},
+{id:"BE-4",sev:"Medium",ver:"Code review",area:"Backend",page:"Coupons",title:"Coupon limits not enforced",
+ steps:"Two customers redeem the last use concurrently; one customer uses a 1-per-customer coupon twice.",expected:"Atomic limit checks.",actual:"perCustomerLimit ignored; usage count read outside the transaction; scoped coupons discount the whole cart.",fix:"Conditional UPDATE on a redeemedCount column; count by user inside the transaction; apply percentage only to eligible lines."},
+{id:"BE-5",sev:"Medium",ver:"Code review",area:"Backend",page:"generateOrderNumber",title:"Order numbers collide and are guessable",
+ steps:"Place ~300+ orders.",expected:"Unique, non-guessable references.",actual:"AVL- + 5 random digits; unique violation becomes a 500.",fix:"Use a sequence-based display number plus a random token for lookup."},
+{id:"BE-6",sev:"High",ver:"Verified",area:"Backend",page:"/api/products, /api/admin/* search",title:"Search became case-sensitive after the move to PostgreSQL",
+ steps:"GET /api/products?search=KUNDAN.",expected:"Same results as 'Kundan'.",actual:"0 vs 1 result. MySQL collation was case-insensitive; Postgres is not.",fix:"Add mode:'insensitive' to every contains filter; consider pg_trgm for fuzzy search. Note featured=true overwrites the search OR clause."},
+{id:"BE-7",sev:"Medium",ver:"Code review",area:"Backend",page:"/api/enquiries/[token]/messages/stream",title:"Chat stream polls the DB per client and can miss messages",
+ steps:"Open several order chats.",expected:"Efficient realtime without gaps.",actual:"setInterval DB query every 1.5 s per connection; lastCheckedAt is set to 'now' after the query, so a message written in between is skipped; long-lived responses break on serverless.",fix:"Use the last seen message createdAt/id as cursor, or Supabase Realtime."},
+{id:"BE-8",sev:"Medium",ver:"Code review",area:"Backend",page:"Several routes",title:"Unknown errors become 500s",
+ steps:"Price a cart with an archived product id; post a review with an invalid productId.",expected:"404/422 with a clear message.",actual:"Generic Error and Prisma FK errors map to 500.",fix:"Throw NotFoundError/ValidationError from services; map Prisma P2002/P2003/P2025 in apiError."},
+// ---------- UX
+{id:"UX-1",sev:"Medium",ver:"Verified",area:"UI/UX",page:"Home",title:"Page scrolls sideways at laptop and phone widths",
+ steps:"Open / at ~1000px or 375px.",expected:"No horizontal scroll.",actual:"scrollWidth 1053 vs 1009 (category tiles) and 394 vs 375 (mobile drawer/hero).",fix:"Check .cat-tile grid widths and the off-canvas drawer (use transform + overflow-x:clip on body)."},
+{id:"UX-2",sev:"Medium",ver:"Verified",area:"UI/UX",page:"Header",title:"Desktop nav wraps and duplicates Track Order",
+ steps:"View at ~1000px.",expected:"Single-line nav, one entry per destination.",actual:"Labels wrap to two lines; Track Order appears twice.",fix:"Shorten labels, drop the duplicate, switch to the drawer below ~1100px."},
+{id:"UX-3",sev:"Medium",ver:"Verified",area:"Accessibility",page:"Checkout, cart",title:"Form fields and quantity buttons lack accessible names",
+ steps:"Inspect the accessibility tree.",expected:"Fields named by their labels; buttons named.",actual:"Fields announced by placeholder (e.g. '9876543210'); buttons announced as '−' and '+'.",fix:"Add id/htmlFor pairs, aria-label on icon buttons, autocomplete and inputMode=\"numeric\" for phone/pincode."},
+{id:"UX-4",sev:"Low",ver:"Verified",area:"UI/UX",page:"Home",title:"Test category and grammar visible to customers",
+ steps:"Open /.",expected:"Only real categories.",actual:"'key chain · 0 designs' and '1 designs'.",fix:"Filter categories with zero active products; pluralise."},
+{id:"UX-5",sev:"Low",ver:"Verified",area:"UI/UX",page:"Cart",title:"Cart promises payment that checkout does not take",
+ steps:"Read cart footer.",expected:"Copy matches the enquiry flow.",actual:"'256-bit Secure Razorpay Payment' on a flow that pays later.",fix:"Explain the two-step flow in one line."},
+{id:"UX-6",sev:"Medium",ver:"Verified",area:"SEO",page:"All pages",title:"Every page has the same title, with the brand twice",
+ steps:"Check document.title on product pages.",expected:"'Kundan Royal Bridal Bangle Set | AVAL Store'.",actual:"'AVAL Store — Handcrafted Bridal Accessories | AVAL Store' everywhere; unknown pages return 200.",fix:"generateMetadata per product/category; fix the title template; add product JSON-LD after prices are server-rendered."},
+// ---------- Performance
+{id:"PF-1",sev:"Medium",ver:"Verified",area:"Performance",page:"public/images, raw <img>",title:"Heavy unoptimised images",
+ steps:"ls -la public/images.",expected:"Responsive, compressed images.",actual:"Each JPEG 776–902 KB, served via <img> (lint flags 8 places).",fix:"next/image with sizes, or pre-encoded WebP/AVIF."},
+{id:"PF-2",sev:"High",ver:"Verified",area:"Content",page:"public/images",title:"Different products use the same photo",
+ steps:"md5sum public/images/*.jpg.",expected:"Each product shows itself.",actual:"hero_bangles, kundan_set and antique_bangles are the same file; name_bangles and trousseau_box are the same file. Customers would see a bangle photo for the trousseau box.",fix:"Replace with real product photography before launch."},
+// ---------- Code quality
+{id:"CQ-1",sev:"Medium",ver:"Verified",area:"Code",page:"Repository",title:"Lint fails and dead/legacy files ship",
+ steps:"npx eslint .",expected:"0 errors.",actual:"3 errors, 24 warnings. mysql2 dependency, MySQL .env.example, 4.1 MB public/extracted prototypes, boilerplate README.",fix:"Fix lint errors, remove legacy files, update .env.example and README with setup steps."},
+{id:"CQ-2",sev:"Low",ver:"Code review",area:"Code",page:"All pages",title:"1,343 inline style objects and no shared UI components",
+ steps:"grep style={{",expected:"Reusable components and CSS classes.",actual:"Styling duplicated across 400–880 line pages.",fix:"Extract Button/Input/Field/Card/Badge using the existing CSS variables; migrate gradually page by page."},
+];
+
+const PLAN = {
+ "Critical":["SEC-1","SEC-2","SEC-3","SEC-4","SEC-5","SEC-6","SEC-7","FN-1"],
+ "High":["SEC-8","SEC-9","SEC-10","SEC-11","SEC-12","BE-1","BE-2","BE-6","FN-2","FN-3","FN-4","FN-5","FN-6","FN-7","PF-2"],
+ "Medium":["SEC-13","SEC-14","SEC-15","BE-3","BE-4","BE-5","BE-7","BE-8","FN-8","FN-9","FN-10","FN-11","UX-1","UX-2","UX-3","UX-6","PF-1","CQ-1"],
+ "Low":["SEC-16","FN-12","UX-4","UX-5","CQ-2"],
+};
+const FUTURE = [
+ ["Notifications","Send the private order link by SMS/WhatsApp Business API and email; notify admin on new enquiry and message."],
+ ["Customer accounts","Optional login reusing the existing register/login/addresses APIs, for repeat customers and order history."],
+ ["Reviews on product pages","Show approved reviews and compute rating from them."],
+ ["Custom-order photo upload","Supabase Storage signed uploads for saree/reference photos."],
+ ["Automated tests","Vitest for priceCart and status transitions; Playwright for browse → bag → checkout → order page."],
+ ["Observability","Structured logging and error tracking (e.g. Sentry) instead of console.error."],
+ ["Size-level stock","Variants per size if sizes sell out independently."],
+ ["GST invoices","After tax settings are confirmed with an accountant."],
+];
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const byId = Object.fromEntries(F.map(f=>[f.id,f]));
+const sevOrder = {Critical:0,High:1,Medium:2,Low:3};
+
+function render(){
+  const list = document.getElementById('list');
+  list.innerHTML = F.slice().sort((a,b)=>sevOrder[a.sev]-sevOrder[b.sev]).map(f=>`
+  <details class="f" id="${f.id}" data-sev="${f.sev}" data-ver="${f.ver}">
+    <summary><span class="id">${f.id}</span><span class="t">${esc(f.title)}<small>${esc(f.page)}</small></span>
+      <span class="r"><span class="chip s-${f.sev}">${f.sev}</span><span class="st${f.ver==='Verified'?' v':''}">${f.ver}</span></span></summary>
+    <dl class="fb">
+      <dt>Area</dt><dd>${esc(f.area)}</dd>
+      <dt>Steps</dt><dd>${esc(f.steps)}</dd>
+      <dt>Expected</dt><dd>${esc(f.expected)}</dd>
+      <dt>Actual</dt><dd>${esc(f.actual)}</dd>
+      <dt>Fix</dt><dd>${esc(f.fix)}</dd>
+    </dl>
+  </details>`).join('');
+
+  const c = {Critical:0,High:0,Medium:0,Low:0};
+  F.forEach(f=>c[f.sev]++);
+  document.getElementById('counts').innerHTML = Object.entries(c).map(([k,v])=>
+    `<div class="count"><b style="color:var(--${{Critical:'crit',High:'high',Medium:'med',Low:'low'}[k]})">${v}</b><span>${k}</span></div>`).join('') +
+    `<div class="count"><b>${F.filter(f=>f.ver==='Verified').length}</b><span>Verified live</span></div>`;
+
+  const plan = document.getElementById('plan');
+  const label = {Critical:"1. Critical — fix immediately",High:"2. High — fix before production",Medium:"3. Medium — important improvements",Low:"4. Low — refinements"};
+  plan.innerHTML = Object.entries(PLAN).map(([sev,ids])=>`
+    <h3>${label[sev]}</h3>
+    <div class="tbl"><table><thead><tr><th>ID</th><th>Page / component</th><th>Issue</th><th>Solution</th></tr></thead><tbody>
+    ${ids.map(id=>{const f=byId[id];return `<tr><td><a href="#${id}" data-open="${id}">${id}</a></td><td>${esc(f.page)}</td><td>${esc(f.title)}</td><td>${esc(f.fix)}</td></tr>`}).join('')}
+    </tbody></table></div>`).join('') +
+    `<h3>5. Future enhancements</h3><div class="tbl"><table><thead><tr><th>Feature</th><th>Value</th></tr></thead><tbody>
+    ${FUTURE.map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+render();
+
+let sev='all', verOnly=false;
+function apply(){
+  document.querySelectorAll('details.f').forEach(d=>{
+    d.hidden = !((sev==='all'||d.dataset.sev===sev) && (!verOnly||d.dataset.ver==='Verified'));
+  });
+}
+document.querySelectorAll('.filters button').forEach(b=>b.addEventListener('click',()=>{
+  if(b.dataset.f==='sev'){ sev=b.dataset.v; document.querySelectorAll('[data-f="sev"]').forEach(x=>x.setAttribute('aria-pressed', String(x===b))); }
+  else { verOnly=!verOnly; b.setAttribute('aria-pressed', String(verOnly)); }
+  apply();
+}));
+function openFromHash(){
+  const id = location.hash.slice(1); const d = document.getElementById(id);
+  if(d && d.tagName==='DETAILS'){ sev='all'; verOnly=false;
+    document.querySelectorAll('.filters button').forEach(x=>x.setAttribute('aria-pressed', String(x.dataset.v==='all'))); apply(); d.open=true; d.scrollIntoView({block:'start'}); }
+}
+window.addEventListener('hashchange', openFromHash); openFromHash();
+</script>
+
+</body></html>

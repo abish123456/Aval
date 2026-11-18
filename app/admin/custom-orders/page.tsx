@@ -1,447 +1,249 @@
 'use client'
 
 import React, { useState } from 'react'
+import { PageHeader, Notice, useAdminData, useFlash, FlashMessage, adminRequest, rupees, formatDate } from '../_components/ui'
 
-function fmt(n: number) {
-  return '₹' + n.toLocaleString('en-IN')
-}
+type Status = 'PENDING' | 'QUOTE_SENT' | 'QUOTE_ACCEPTED' | 'QUOTE_DECLINED' | 'QUOTE_EXPIRED' | 'IN_PRODUCTION' | 'COMPLETED' | 'CANCELLED'
 
 interface CustomRequest {
   id: string
-  reference: string
-  customerName: string
+  name: string
   email: string
   phone: string
-  type: string
-  eventDate: string
-  requestedAt: string
-  bangleSize: string
-  colorTheme: string
-  customInitials: string
-  budget: string
-  notes: string
-  status: 'NEW' | 'QUOTE_SENT' | 'ACCEPTED' | 'IN_PRODUCTION' | 'COMPLETED'
-  quotePrice?: number
-  quoteAdditional?: number
-  productionDays?: number
-  quoteExpiry?: string
-  artisanNote?: string
+  description: string
+  budget: string | null
+  weddingDate: string | null
+  occasion: string | null
+  status: Status
+  quoteToken: string | null
+  quotePricePaise: number | null
+  quoteNote: string | null
+  quoteSentAt: string | null
+  quoteExpiresAt: string | null
+  createdAt: string
 }
 
-const INITIAL_REQUESTS: CustomRequest[] = [
-  {
-    id: 'req-1',
-    reference: 'CUST-7821',
-    customerName: 'Priya Sundaram',
-    email: 'priya.sundaram@gmail.com',
-    phone: '+91 98402 12345',
-    type: 'Bespoke Kundan Bangle Set',
-    eventDate: '2026-11-18',
-    requestedAt: '24 Oct 2026',
-    bangleSize: '2.6',
-    colorTheme: 'Crimson Red with Antique Gold',
-    customInitials: 'Priya & Karthik • 18-11-2026',
-    budget: '₹2,500 – ₹4,000',
-    notes: 'Bride requests matching red silk thread to coordinate with her Muhurtham Kanjivaram saree border. Central kada needs 22k gold name lettering.',
-    status: 'QUOTE_SENT',
-    quotePrice: 2800,
-    quoteAdditional: 300,
-    productionDays: 6,
-    quoteExpiry: '2026-11-05',
-    artisanNote: 'Sourced premium crimson thread and 22k gold lettering foil. Ready to start upon bride confirmation.',
-  },
-  {
-    id: 'req-2',
-    reference: 'CUST-7822',
-    customerName: 'Meenakshi Iyer',
-    email: 'meenakshi.iyer@gmail.com',
-    phone: '+91 94421 77610',
-    type: 'Bridesmaid Favours (12 Sets)',
-    eventDate: '2026-12-05',
-    requestedAt: '26 Oct 2026',
-    bangleSize: 'Assorted (4x 2.4, 6x 2.6, 2x 2.8)',
-    colorTheme: 'Pastel Mint Green & Gold',
-    customInitials: '#MeenaWedsSiddharth',
-    budget: '₹8,000 – ₹12,000',
-    notes: 'Bulk order for bride tribe. Each bangle pair should be packaged in individual gold potli bags with personalised thank-you tags.',
-    status: 'NEW',
-  },
-  {
-    id: 'req-3',
-    reference: 'CUST-7640',
-    customerName: 'Ananya Ramachandran',
-    email: 'ananya.rc@outlook.com',
-    phone: '+91 94431 88762',
-    type: 'Jadabi Poola Jada Floral Hair Clips',
-    eventDate: '2026-11-22',
-    requestedAt: '19 Oct 2026',
-    bangleSize: 'N/A',
-    colorTheme: 'Fresh Jasmine Cream & Golden Zari',
-    customInitials: 'N/A',
-    budget: '₹1,500 – ₹2,500',
-    notes: 'Full 9-piece poola jada floral hair extensions set with dangling mini pearls for classical Bharatanatyam and bridal reception styling.',
-    status: 'IN_PRODUCTION',
-    quotePrice: 1850,
-    quoteAdditional: 0,
-    productionDays: 5,
-    quoteExpiry: '2026-10-30',
-    artisanNote: 'Handcrafting by master artisan in Kanyakumari studio. Pearls assembled.',
-  },
+const LABEL: Record<Status, string> = {
+  PENDING: 'New',
+  QUOTE_SENT: 'Quote sent',
+  QUOTE_ACCEPTED: 'Accepted',
+  QUOTE_DECLINED: 'Declined',
+  QUOTE_EXPIRED: 'Quote expired',
+  IN_PRODUCTION: 'In production',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Closed',
+}
+const TAG: Record<Status, string> = {
+  PENDING: 'tag-warning',
+  QUOTE_SENT: 'tag-blush',
+  QUOTE_ACCEPTED: 'tag-ok',
+  QUOTE_DECLINED: 'tag-error',
+  QUOTE_EXPIRED: 'tag-error',
+  IN_PRODUCTION: 'tag-blush',
+  COMPLETED: 'tag-ok',
+  CANCELLED: 'tag-error',
+}
+const FILTERS: { key: string; label: string; match: (s: Status) => boolean }[] = [
+  { key: 'open', label: 'Needs action', match: (s) => s === 'PENDING' || s === 'QUOTE_DECLINED' || s === 'QUOTE_EXPIRED' || s === 'QUOTE_ACCEPTED' },
+  { key: 'sent', label: 'Waiting on customer', match: (s) => s === 'QUOTE_SENT' },
+  { key: 'production', label: 'In production', match: (s) => s === 'IN_PRODUCTION' },
+  { key: 'closed', label: 'Done / closed', match: (s) => s === 'COMPLETED' || s === 'CANCELLED' },
+  { key: 'all', label: 'All', match: () => true },
 ]
+const CAN_QUOTE: Status[] = ['PENDING', 'QUOTE_SENT', 'QUOTE_DECLINED', 'QUOTE_EXPIRED']
+
+function whatsappLink(phone: string, text: string) {
+  const d = phone.replace(/\D/g, '')
+  return `https://wa.me/${d.length === 10 ? '91' + d : d}?text=${encodeURIComponent(text)}`
+}
 
 export default function AdminCustomOrdersPage() {
-  const [requests, setRequests] = useState<CustomRequest[]>(INITIAL_REQUESTS)
-  const [selectedReq, setSelectedReq] = useState<CustomRequest | null>(requests[0])
-  const [filterStatus, setFilterStatus] = useState<string>('ALL')
+  const { data, error, loading, reload } = useAdminData<CustomRequest[]>('/api/custom-orders')
+  const [filter, setFilter] = useState('open')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [price, setPrice] = useState('')
+  const [note, setNote] = useState('')
+  const [validDays, setValidDays] = useState('7')
+  const [busy, setBusy] = useState(false)
+  const [lastQuoteUrl, setLastQuoteUrl] = useState<string | null>(null)
+  const [flash, showFlash, clearFlash] = useFlash()
 
-  // Quote form state
-  const [quotePrice, setQuotePrice] = useState<number>(2500)
-  const [quoteAdditional, setQuoteAdditional] = useState<number>(300)
-  const [productionDays, setProductionDays] = useState<number>(6)
-  const [quoteExpiry, setQuoteExpiry] = useState<string>('2026-11-10')
-  const [artisanNote, setArtisanNote] = useState<string>('')
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const rows = (data ?? []).filter((r) => FILTERS.find((f) => f.key === filter)?.match(r.status))
+  const selected = (data ?? []).find((r) => r.id === selectedId) ?? rows[0] ?? null
+  const quoteUrl = (r: CustomRequest) => (r.quoteToken ? `${typeof window !== 'undefined' ? window.location.origin : ''}/quote/${r.quoteToken}` : null)
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg)
-    setTimeout(() => setToastMessage(null), 3000)
+  function select(r: CustomRequest) {
+    setSelectedId(r.id)
+    setPrice(r.quotePricePaise ? String(r.quotePricePaise / 100) : '')
+    setNote(r.quoteNote ?? '')
+    setLastQuoteUrl(null)
   }
 
-  const handleSelectReq = (req: CustomRequest) => {
-    setSelectedReq(req)
-    setQuotePrice(req.quotePrice || 2500)
-    setQuoteAdditional(req.quoteAdditional || 0)
-    setProductionDays(req.productionDays || 6)
-    setQuoteExpiry(req.quoteExpiry || '2026-11-10')
-    setArtisanNote(req.artisanNote || '')
+  async function sendQuote(r: CustomRequest) {
+    const rupeesValue = Number(price)
+    if (!Number.isFinite(rupeesValue) || rupeesValue <= 0) return showFlash('error', 'Enter the quote amount in rupees.')
+    if (note.trim().length < 5) return showFlash('error', 'Add a short note for the customer (what is included, timeline).')
+    setBusy(true)
+    const res = await adminRequest<{ quoteUrl: string }>(`/api/admin/custom-orders/${r.id}/quote`, 'POST', {
+      quotePricePaise: Math.round(rupeesValue * 100),
+      quoteNote: note.trim(),
+      validDays: Math.min(30, Math.max(1, Number(validDays) || 7)),
+    })
+    setBusy(false)
+    if (!res.ok) return showFlash('error', res.error ?? 'Quote not sent.')
+    setLastQuoteUrl(res.data?.quoteUrl ?? null)
+    showFlash('ok', 'Quote saved and emailed. You can also send the link on WhatsApp.')
+    reload()
   }
 
-  const handleSendQuote = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedReq) return
-
-    setRequests((prev) =>
-      prev.map((r) =>
-        r.id === selectedReq.id
-          ? {
-              ...r,
-              status: 'QUOTE_SENT',
-              quotePrice,
-              quoteAdditional,
-              productionDays,
-              quoteExpiry,
-              artisanNote,
-            }
-          : r
-      )
-    )
-
-    setSelectedReq((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: 'QUOTE_SENT',
-            quotePrice,
-            quoteAdditional,
-            productionDays,
-            quoteExpiry,
-            artisanNote,
-          }
-        : null
-    )
-
-    showToast(`Quote sent to ${selectedReq.customerName} for ${selectedReq.reference}!`)
+  async function setStatus(r: CustomRequest, status: 'IN_PRODUCTION' | 'COMPLETED' | 'CANCELLED') {
+    setBusy(true)
+    const res = await adminRequest(`/api/admin/custom-orders/${r.id}`, 'PATCH', { status })
+    setBusy(false)
+    if (!res.ok) return showFlash('error', res.error ?? 'Not updated.')
+    showFlash('ok', `Marked ${LABEL[status].toLowerCase()}.`)
+    reload()
   }
 
-  const handleStatusUpdate = (newStatus: CustomRequest['status']) => {
-    if (!selectedReq) return
-    setRequests((prev) =>
-      prev.map((r) => (r.id === selectedReq.id ? { ...r, status: newStatus } : r))
-    )
-    setSelectedReq({ ...selectedReq, status: newStatus })
-    showToast(`Status updated to ${newStatus}`)
-  }
-
-  const filteredRequests = requests.filter((r) => {
-    if (filterStatus === 'ALL') return true
-    return r.status === filterStatus
-  })
+  const url = selected ? lastQuoteUrl ?? quoteUrl(selected) : null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            background: 'var(--dk)',
-            color: '#fff',
-            padding: '12px 20px',
-            boxShadow: 'var(--shadow-lg)',
-            zIndex: 1000,
-            fontSize: '14px',
-            borderLeft: '4px solid var(--ok)',
-          }}
-        >
-          {toastMessage}
+    <div>
+      <PageHeader title="Custom Requests" subtitle="Bespoke design requests from the Custom Order form. Send a quote; when the customer accepts, it becomes a payable order under Bridal Orders." />
+
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setFilter(f.key)}
+            aria-pressed={filter === f.key}
+            className={`btn btn-sm ${filter === f.key ? 'btn-primary' : 'btn-outline'}`}
+          >
+            {f.label} ({(data ?? []).filter((r) => f.match(r.status)).length})
+          </button>
+        ))}
+      </div>
+
+      {error ? (
+        <Notice kind="error">{error}</Notice>
+      ) : loading && !data ? (
+        <Notice>Loading requests…</Notice>
+      ) : (data ?? []).length === 0 ? (
+        <Notice>No custom requests yet. They appear here when a customer submits the Custom Order form.</Notice>
+      ) : (
+        <div className="admin-two-col-grid">
+          <div className="card" style={{ padding: '8px 16px', overflowX: 'auto' }}>
+            {rows.length === 0 ? (
+              <p style={{ color: 'var(--tx2)', padding: '20px 0' }}>Nothing in this view.</p>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr><th>Customer</th><th>Wedding</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id} onClick={() => select(r)} style={{ cursor: 'pointer', background: selected?.id === r.id ? 'var(--bl2)' : undefined }}>
+                      <td>
+                        <button type="button" onClick={() => select(r)} style={{ background: 'none', border: 0, padding: 0, textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+                          <div style={{ fontWeight: 600 }}>{r.name}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--tx2)' }}>Received {formatDate(r.createdAt)}</div>
+                        </button>
+                      </td>
+                      <td style={{ fontSize: '13px' }}>{r.weddingDate || '—'}</td>
+                      <td><span className={`tag ${TAG[r.status]}`}>{LABEL[r.status]}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {selected && (
+            <div className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                <div>
+                  <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', color: 'var(--dk)', margin: 0 }}>{selected.name}</h2>
+                  <div style={{ fontSize: '13px', color: 'var(--tx2)' }}>{selected.phone} · {selected.email}</div>
+                </div>
+                <span className={`tag ${TAG[selected.status]}`} style={{ alignSelf: 'flex-start' }}>{LABEL[selected.status]}</span>
+              </div>
+
+              <div style={{ background: 'var(--bg)', padding: '12px', fontSize: '14px', whiteSpace: 'pre-line' }}>{selected.description}</div>
+              <div style={{ fontSize: '13px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                {selected.weddingDate && <span>Wedding: <strong>{selected.weddingDate}</strong></span>}
+                {selected.budget && <span>Budget: <strong>{selected.budget}</strong></span>}
+                {selected.occasion && <span>Occasion: <strong>{selected.occasion}</strong></span>}
+              </div>
+
+              {selected.quotePricePaise && (
+                <div style={{ fontSize: '13px' }}>
+                  Last quote: <strong>{rupees(selected.quotePricePaise)}</strong>
+                  {selected.quoteSentAt ? ` · sent ${formatDate(selected.quoteSentAt)}` : ''}
+                  {selected.quoteExpiresAt ? ` · valid to ${formatDate(selected.quoteExpiresAt)}` : ''}
+                </div>
+              )}
+
+              {url && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', fontSize: '12px' }}>
+                  <a href={url} target="_blank" style={{ overflowWrap: 'anywhere' }}>Customer quote page</a>
+                  <a
+                    className="btn btn-outline btn-sm"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    href={whatsappLink(selected.phone, `Vanakkam ${selected.name}! Your AVAL custom quote is ready: ${url}`)}
+                  >
+                    Send link on WhatsApp
+                  </a>
+                </div>
+              )}
+
+              {CAN_QUOTE.includes(selected.status) && (
+                <form onSubmit={(e) => { e.preventDefault(); sendQuote(selected) }} style={{ borderTop: '1px solid var(--bd)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <strong style={{ fontSize: '14px' }}>{selected.status === 'PENDING' ? 'Send a quote' : 'Send a new quote'}</strong>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: '12px', flex: '1 1 140px' }}>
+                      Price incl. delivery (₹)
+                      <input className="input" type="number" min="1" step="1" value={price} onChange={(e) => setPrice(e.target.value)} required />
+                    </label>
+                    <label style={{ fontSize: '12px', width: '120px' }}>
+                      Valid for (days)
+                      <input className="input" type="number" min="1" max="30" step="1" value={validDays} onChange={(e) => setValidDays(e.target.value)} />
+                    </label>
+                  </div>
+                  <label style={{ fontSize: '12px' }}>
+                    Note to the customer
+                    <textarea className="input" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What's included, materials, how long it takes" required />
+                  </label>
+                  <button type="submit" className="btn btn-primary" disabled={busy} style={{ alignSelf: 'flex-start' }}>{busy ? 'Sending…' : 'Send quote'}</button>
+                </form>
+              )}
+
+              {selected.status === 'QUOTE_ACCEPTED' && (
+                <div style={{ fontSize: '13px', background: 'var(--ok-bg)', color: 'var(--ok)', padding: '10px 12px' }}>
+                  Accepted — the order is in Bridal Orders (look for “From custom request”). Collect payment and update its status there.
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {selected.status === 'QUOTE_ACCEPTED' && (
+                  <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => setStatus(selected, 'IN_PRODUCTION')}>Mark in production</button>
+                )}
+                {selected.status === 'IN_PRODUCTION' && (
+                  <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => setStatus(selected, 'COMPLETED')}>Mark completed</button>
+                )}
+                {selected.status !== 'COMPLETED' && selected.status !== 'CANCELLED' && (
+                  <button type="button" disabled={busy} onClick={() => setStatus(selected, 'CANCELLED')} style={{ background: 'none', border: 0, color: 'var(--er)', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}>
+                    Close request
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '32px', color: 'var(--dk)', margin: 0 }}>
-            Custom Bridal Orders &amp; Quotes
-          </h1>
-          <p style={{ color: 'var(--tx2)', fontSize: '14px', marginTop: '4px' }}>
-            Review incoming bespoke bridal design requests, examine preferences, and send quotes to brides.
-          </p>
-        </div>
-
-        {/* Filter Pills */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {[
-            { id: 'ALL', label: 'All Requests' },
-            { id: 'NEW', label: 'New Requests' },
-            { id: 'QUOTE_SENT', label: 'Quotes Sent' },
-            { id: 'IN_PRODUCTION', label: 'In Production' },
-            { id: 'COMPLETED', label: 'Completed' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setFilterStatus(tab.id)}
-              style={{
-                padding: '6px 14px',
-                border: '1px solid var(--bd)',
-                background: filterStatus === tab.id ? 'var(--pr)' : '#fff',
-                color: filterStatus === tab.id ? '#fff' : 'var(--dk)',
-                fontSize: '13px',
-                fontWeight: filterStatus === tab.id ? 600 : 400,
-                cursor: 'pointer',
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Layout: Requests Table + Quote Detail Workstation */}
-      <div className="admin-two-col-grid">
-        {/* Left: Requests List Table */}
-        <div className="card" style={{ padding: '20px', background: '#fff' }}>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', marginBottom: '16px' }}>
-            Submitted Requests ({filteredRequests.length})
-          </h2>
-
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--bd)', color: 'var(--tx2)' }}>
-                  <th style={{ padding: '10px' }}>Reference</th>
-                  <th style={{ padding: '10px' }}>Customer</th>
-                  <th style={{ padding: '10px' }}>Design Type</th>
-                  <th style={{ padding: '10px' }}>Event Date</th>
-                  <th style={{ padding: '10px' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRequests.map((req) => {
-                  const isSelected = selectedReq?.id === req.id
-                  return (
-                    <tr
-                      key={req.id}
-                      onClick={() => handleSelectReq(req)}
-                      style={{
-                        borderBottom: '1px solid #F0E8E6',
-                        background: isSelected ? '#FAF2F0' : 'transparent',
-                        cursor: 'pointer',
-                        transition: 'background 0.15s ease',
-                      }}
-                    >
-                      <td style={{ padding: '12px 10px', fontWeight: 700, color: 'var(--pr)' }}>
-                        {req.reference}
-                      </td>
-                      <td style={{ padding: '12px 10px' }}>
-                        <div style={{ fontWeight: 600 }}>{req.customerName}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--tx2)' }}>{req.phone}</div>
-                      </td>
-                      <td style={{ padding: '12px 10px' }}>{req.type}</td>
-                      <td style={{ padding: '12px 10px', whiteSpace: 'nowrap' }}>
-                        {new Date(req.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                      </td>
-                      <td style={{ padding: '12px 10px' }}>
-                        {req.status === 'NEW' && <span className="tag tag-primary">New</span>}
-                        {req.status === 'QUOTE_SENT' && <span className="tag tag-warning">Quote Sent</span>}
-                        {req.status === 'IN_PRODUCTION' && <span className="tag tag-ok">Production</span>}
-                        {req.status === 'COMPLETED' && <span className="tag tag-blush">Completed</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right: Selected Request Review & Quote Preparation Form */}
-        {selectedReq ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Request Details Card */}
-            <div className="card" style={{ padding: '24px', background: '#fff' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 700, color: 'var(--pr)' }}>
-                      {selectedReq.reference}
-                    </span>
-                    <span className="tag tag-blush">{selectedReq.status}</span>
-                  </div>
-                  <h3 style={{ fontSize: '16px', color: 'var(--dk)', marginTop: '4px' }}>
-                    {selectedReq.type}
-                  </h3>
-                </div>
-
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--tx2)' }}>Target Date</div>
-                  <div style={{ fontWeight: 600, color: 'var(--pr)' }}>
-                    {new Date(selectedReq.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Customer Requirements Summary */}
-              <div style={{ background: '#FAF6F4', padding: '16px', border: '1px solid var(--bd)', marginBottom: '18px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div><strong>Customer:</strong> {selectedReq.customerName} ({selectedReq.email} • {selectedReq.phone})</div>
-                <div><strong>Bangle Size:</strong> {selectedReq.bangleSize}</div>
-                <div><strong>Color Palette:</strong> {selectedReq.colorTheme}</div>
-                <div><strong>Bespoke Lettering:</strong> &ldquo;{selectedReq.customInitials}&rdquo;</div>
-                <div><strong>Customer Budget:</strong> {selectedReq.budget}</div>
-                <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: '1px dashed var(--bd)' }}>
-                  <strong>Special Instructions:</strong><br />
-                  <span style={{ color: 'var(--tx)', fontStyle: 'italic' }}>{selectedReq.notes}</span>
-                </div>
-              </div>
-
-              {/* Status Action Buttons */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '18px', flexWrap: 'wrap' }}>
-                {selectedReq.status !== 'IN_PRODUCTION' && (
-                  <button
-                    onClick={() => handleStatusUpdate('IN_PRODUCTION')}
-                    className="btn btn-sm btn-outline"
-                    style={{ fontSize: '12px' }}
-                  >
-                    🛠️ Move to Production
-                  </button>
-                )}
-                {selectedReq.status !== 'COMPLETED' && (
-                  <button
-                    onClick={() => handleStatusUpdate('COMPLETED')}
-                    className="btn btn-sm btn-outline"
-                    style={{ fontSize: '12px' }}
-                  >
-                    ✓ Mark as Completed
-                  </button>
-                )}
-                <a
-                  href={`https://wa.me/${selectedReq.phone.replace(/[^0-9]/g, '')}?text=Hi%20${encodeURIComponent(selectedReq.customerName)}%2C%20regarding%20your%20custom%20bridal%20order%20${selectedReq.reference}...`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-sm btn-outline"
-                  style={{ fontSize: '12px', color: '#1d4a2b' }}
-                >
-                  💬 WhatsApp Bride
-                </a>
-              </div>
-
-              {/* Prepare Quote Form */}
-              <div style={{ borderTop: '2px solid var(--bd)', paddingTop: '18px' }}>
-                <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', marginBottom: '14px' }}>
-                  Prepare Artisan Quote
-                </h3>
-
-                <form onSubmit={handleSendQuote} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-                    <label className="input-label">
-                      <span>Base Custom Price (₹)</span>
-                      <input
-                        type="number"
-                        className="input"
-                        required
-                        value={quotePrice}
-                        onChange={(e) => setQuotePrice(Number(e.target.value))}
-                      />
-                    </label>
-
-                    <label className="input-label">
-                      <span>Additional Embellishment (₹)</span>
-                      <input
-                        type="number"
-                        className="input"
-                        value={quoteAdditional}
-                        onChange={(e) => setQuoteAdditional(Number(e.target.value))}
-                      />
-                    </label>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-                    <label className="input-label">
-                      <span>Production Days</span>
-                      <input
-                        type="number"
-                        className="input"
-                        required
-                        value={productionDays}
-                        onChange={(e) => setProductionDays(Number(e.target.value))}
-                      />
-                    </label>
-
-                    <label className="input-label">
-                      <span>Quote Expiry Date</span>
-                      <input
-                        type="date"
-                        className="input"
-                        required
-                        value={quoteExpiry}
-                        onChange={(e) => setQuoteExpiry(e.target.value)}
-                      />
-                    </label>
-                  </div>
-
-                  <label className="input-label">
-                    <span>Artisan Notes for Customer</span>
-                    <textarea
-                      className="input"
-                      rows={3}
-                      value={artisanNote}
-                      onChange={(e) => setArtisanNote(e.target.value)}
-                      placeholder="e.g. Sourced matching crimson silk thread and fine Kundan stones. Production begins upon acceptance."
-                    />
-                  </label>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', paddingTop: '12px', borderTop: '1px solid #F0E8E6' }}>
-                    <div>
-                      <span style={{ fontSize: '13px', color: 'var(--tx2)' }}>Total Quoted: </span>
-                      <strong style={{ fontSize: '18px', color: 'var(--pr)' }}>{fmt(quotePrice + quoteAdditional)}</strong>
-                    </div>
-
-                    <button type="submit" className="btn btn-primary" style={{ padding: '10px 24px' }}>
-                      Send Quote to Bride →
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="card" style={{ padding: '48px', textAlign: 'center', color: 'var(--tx2)' }}>
-            Select a custom request to review details and prepare a quote.
-          </div>
-        )}
-      </div>
+      <FlashMessage flash={flash} onClose={clearFlash} />
     </div>
   )
 }
-

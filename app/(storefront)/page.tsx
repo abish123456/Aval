@@ -1,25 +1,36 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { CATEGORIES, PRODUCTS } from '@/lib/data'
+import { listProducts, listCategories } from '@/src/server/catalog'
+import { loadPricingSettings } from '@/src/server/pricing/engine'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'AVAL Store — Handcrafted Bridal Accessories',
+  title: { absolute: 'AVAL Store — Handcrafted Bridal Accessories' },
   description: 'Customised bangles, hair clips and wedding accessories handcrafted in Kanyakumari. Free shipping above ₹1,500.',
 }
 
-const FEATURES = [
-  { icon: '✦', title: 'Handcrafted in Kanyakumari', desc: 'Every piece made by skilled heritage artisans' },
-  { icon: '🌸', title: 'Personalised Sets', desc: 'Bride & groom names and dates lettered by hand' },
-  { icon: '📦', title: 'Free Express Shipping', desc: 'On all orders above ₹1,499 across India' },
-  { icon: '💎', title: 'Velvet Gift Trunk', desc: 'Complimentary signature trousseau presentation' },
-]
+function features(freeShippingRupees: number) {
+  return [
+    { icon: '✦', title: 'Handcrafted in Kanyakumari', desc: 'Every piece made by skilled heritage artisans' },
+    { icon: '🌸', title: 'Personalised Sets', desc: 'Bride & groom names and dates lettered by hand' },
+    { icon: '📦', title: 'Free Express Shipping', desc: `On orders of ₹${freeShippingRupees.toLocaleString('en-IN')} and above across India` },
+    { icon: '💎', title: 'Velvet Gift Trunk', desc: 'Complimentary signature trousseau presentation' },
+  ]
+}
 
 function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN')
 }
 
-export default function HomePage() {
-  const bestSellers = PRODUCTS.slice(0, 4)
+export default async function HomePage() {
+  const [bestSellers, allCategories, pricing] = await Promise.all([
+    listProducts({ take: 4, bestSellersFirst: true }),
+    listCategories(),
+    loadPricingSettings(),
+  ])
+  const categories = allCategories.slice(0, 4)
+  const FEATURES = features(Math.round(pricing.freeShippingThresholdPaise / 100))
 
   return (
     <div>
@@ -124,7 +135,7 @@ export default function HomePage() {
             <Link href="/shop" className="btn btn-ghost" style={{ fontSize: '14px' }}>View all →</Link>
           </div>
           <div className="grid grid-auto" style={{ gap: '20px' }}>
-            {CATEGORIES.slice(0, 4).map((cat) => (
+            {categories.slice(0, 4).map((cat) => (
               <Link key={cat.slug} href={`/category/${cat.slug}`} className="cat-tile" style={{ textDecoration: 'none', position: 'relative', overflow: 'hidden', height: '220px', borderRadius: 0, border: '1px solid var(--bd)' }}>
                 <img
                   src={cat.image}
@@ -141,7 +152,7 @@ export default function HomePage() {
                 <div style={{ position: 'relative', zIndex: 1, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}>
                   <div className="cat-tile-label" style={{ color: '#fff', fontSize: '18px', fontWeight: 600 }}>{cat.name}</div>
                   <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginTop: '4px' }}>
-                    {cat.itemCount} designs
+                    {cat.itemCount} {cat.itemCount === 1 ? 'design' : 'designs'}
                   </div>
                 </div>
               </Link>
@@ -197,16 +208,16 @@ export default function HomePage() {
       <section className="container" style={{ margin: '60px auto' }}>
         <div className="promo-banner" style={{ background: 'linear-gradient(135deg, var(--pr) 0%, var(--dk) 100%)', borderRadius: 0, padding: '40px' }}>
           <div>
-            <p className="promo-banner-eyebrow" style={{ color: '#EBD3CF' }}>Exclusive Wedding Combo</p>
+            <p className="promo-banner-eyebrow" style={{ color: '#EBD3CF' }}>Wedding Season Offers</p>
             <h2 className="promo-banner-title" style={{ color: '#FBF7F3', fontSize: '32px', marginBottom: '8px' }}>
-              Royal Kundan Bangles + Pearl Hair Comb
+              Coupons for your bridal set
             </h2>
             <p className="promo-banner-sub" style={{ opacity: 0.9 }}>
-              Get the complete wedding duo for ₹2,299 (Save ₹1,099). Free shipping &amp; luxury bridal trunk included.
+              See this season&apos;s codes and apply them to your bag in one tap.
             </p>
           </div>
           <Link href="/offers" className="btn" style={{ background: '#FBF7F3', color: 'var(--pr)', borderColor: '#FBF7F3', fontWeight: 600, padding: '12px 28px' }}>
-            View Offer Details
+            See current offers
           </Link>
         </div>
       </section>

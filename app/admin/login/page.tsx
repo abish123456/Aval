@@ -10,7 +10,7 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     if (!email || !password) {
@@ -18,18 +18,34 @@ export default function AdminLoginPage() {
       return
     }
     setLoading(true)
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Invalid credentials')
+        setLoading(false)
+        return
+      }
+      // Check if user has admin role
+      if (data.data?.role !== 'OWNER' && data.data?.role !== 'STAFF') {
+        // Don't leave a customer session behind on the admin login screen
+        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+        setError('You do not have admin access.')
+        setLoading(false)
+        return
+      }
+      // Return to the admin page that sent us here (same-site paths only)
+      const next = new URLSearchParams(window.location.search).get('next')
+      router.push(next && next.startsWith('/admin') && !next.startsWith('//') ? next : '/admin')
+      router.refresh()
+    } catch {
+      setError('Connection error. Please try again.')
       setLoading(false)
-      router.push('/admin')
-    }, 800)
-  }
-
-  function handleDemoLogin() {
-    setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      router.push('/admin')
-    }, 600)
+    }
   }
 
   return (
@@ -127,7 +143,7 @@ export default function AdminLoginPage() {
                 id="admin-email"
                 type="email"
                 className="input"
-                placeholder="abishek@avalstore.in"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -161,53 +177,8 @@ export default function AdminLoginPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              margin: '20px 0',
-              color: 'var(--tx2)',
-              fontSize: '12px',
-            }}
-          >
-            <div style={{ flex: 1, height: '1px', background: 'var(--bd)' }} />
-            or
-            <div style={{ flex: 1, height: '1px', background: 'var(--bd)' }} />
-          </div>
-
-          {/* Demo Button */}
-          <button
-            onClick={handleDemoLogin}
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px 20px',
-              borderRadius: '10px',
-              border: '2px dashed var(--bl)',
-              background: 'rgba(235,211,207,0.12)',
-              color: 'var(--pr)',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-            }}
-          >
-            <span>👤</span>
-            <span>Demo: Sign in as Abishek (Admin)</span>
-          </button>
-
-          <p style={{ fontSize: '11px', color: 'var(--tx2)', textAlign: 'center', marginTop: '20px' }}>
-            This is a prototype. No real authentication is implemented.
-          </p>
         </div>
       </div>
     </div>
   )
 }
-

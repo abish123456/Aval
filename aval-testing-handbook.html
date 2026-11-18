@@ -1,0 +1,558 @@
+<title>AVAL Testing Handbook</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap">
+<style>
+/* Layout: sticky progress bar + section tabs; test cases as expandable rows grouped by phase; tracker fields inline */
+:root{
+  --bg:#f7f5f6; --surface:#ffffff; --fg:#231a1e; --muted:#6a5c62; --line:#e6dfe2; --accent:#7a1026; --accent-soft:#f6e7eb;
+  --pass:#1f6b44; --pass-bg:#e1f2e8; --fail:#b3261e; --fail-bg:#fbe7e5; --block:#9a5b00; --block-bg:#fcefd8; --nt:#5d6170; --nt-bg:#eceef3;
+  --code:#f1ecef;
+  --f-display:"Fraunces",Georgia,serif; --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151114; --surface:#1e191c; --fg:#efe8eb; --muted:#a99ca2; --line:#342c30; --accent:#e989a8; --accent-soft:#3a1d27;
+  --pass:#7fd3a3; --pass-bg:#16301f; --fail:#ff8f86; --fail-bg:#3b1b19; --block:#f2bd66; --block-bg:#3a2a12; --nt:#b7bccb; --nt-bg:#262832; --code:#2a2327; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151114; --surface:#1e191c; --fg:#efe8eb; --muted:#a99ca2; --line:#342c30; --accent:#e989a8; --accent-soft:#3a1d27;
+  --pass:#7fd3a3; --pass-bg:#16301f; --fail:#ff8f86; --fail-bg:#3b1b19; --block:#f2bd66; --block-bg:#3a2a12; --nt:#b7bccb; --nt-bg:#262832; --code:#2a2327; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.6 var(--f-body);margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+header.top .wrap{padding-block:12px 0;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand h1{font:700 22px/1.2 var(--f-display);margin:0;text-wrap:balance}
+.save-note{font-size:12px;color:var(--muted)}
+.progress{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--nt-bg)}
+.progress span{display:block;height:100%}
+.counts{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.counts b{color:var(--fg)}
+nav.tabs{display:flex;gap:4px;overflow-x:auto}
+nav.tabs a{padding:8px 12px;color:var(--muted);text-decoration:none;font-weight:500;font-size:14px;border-bottom:2px solid transparent;white-space:nowrap}
+nav.tabs a[aria-current="page"]{color:var(--accent);border-color:var(--accent)}
+h2{font:700 26px/1.25 var(--f-display);margin:32px 0 8px;text-wrap:balance}
+h3{font:600 18px/1.3 var(--f-body);margin:28px 0 6px}
+p,li{max-width:72ch}
+a{color:var(--accent)}
+code,.mono{font-family:var(--f-mono);font-size:13px;background:var(--code);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+.chip{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.03em;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.s-Pass{background:var(--pass-bg);color:var(--pass)} .s-Fail{background:var(--fail-bg);color:var(--fail)} .s-Blocked{background:var(--block-bg);color:var(--block)} .s-NotTested{background:var(--nt-bg);color:var(--nt)}
+.t-chip{background:var(--accent-soft);color:var(--accent)}
+.k-chip{background:var(--fail-bg);color:var(--fail)}
+.n-chip{background:var(--block-bg);color:var(--block)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:16px 0}
+.filters select,.filters input{font:inherit;font-size:14px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg)}
+.phase{margin-top:28px}
+.phase-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.phase-head h3{margin:0}
+.phase-intro{color:var(--muted);font-size:14px;margin:4px 0 10px}
+details.tc{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:8px}
+details.tc[data-status="Pass"]{border-left:4px solid var(--pass)} details.tc[data-status="Fail"]{border-left:4px solid var(--fail)} details.tc[data-status="Blocked"]{border-left:4px solid var(--block)}
+details.tc summary{list-style:none;cursor:pointer;padding:12px 16px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:baseline}
+details.tc summary::-webkit-details-marker{display:none}
+.tc-id{font:500 13px var(--f-mono);color:var(--muted)}
+.tc-title{font-weight:600}
+.tc-title small{display:block;font-weight:400;color:var(--muted);font-size:12.5px}
+.tc-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.tc-body{padding:4px 16px 16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+.tc-body h4{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}
+.tc-body ol,.tc-body ul{margin:0;padding-left:22px}
+.tc-body li{margin-bottom:4px}
+.known{background:var(--fail-bg);color:var(--fg);border-radius:6px;padding:8px 12px;font-size:14px}
+.known b{color:var(--fail)}
+.track{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;background:var(--bg);border-radius:6px;padding:12px}
+.track label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.track textarea,.track input,.track select{font:inherit;font-size:14px;font-weight:400;color:var(--fg);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);width:100%;min-width:0}
+.track .wide{grid-column:1/-1}
+.saved{font-size:12px;color:var(--muted);grid-column:1/-1}
+.statusbtns{display:flex;gap:6px;flex-wrap:wrap}
+.statusbtns button{font:600 13px var(--f-body);padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+.statusbtns button[aria-pressed="true"].b-Pass{background:var(--pass);border-color:var(--pass);color:var(--surface)}
+.statusbtns button[aria-pressed="true"].b-Fail{background:var(--fail);border-color:var(--fail);color:var(--surface)}
+.statusbtns button[aria-pressed="true"].b-Blocked{background:var(--block);border-color:var(--block);color:var(--surface)}
+.statusbtns button[aria-pressed="true"].b-NotTested{background:var(--nt);border-color:var(--nt);color:var(--surface)}
+button.primary{font:600 14px var(--f-body);padding:8px 16px;border-radius:6px;border:0;background:var(--accent);color:var(--surface);cursor:pointer}
+button.ghost{font:500 13px var(--f-body);padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+button:focus-visible,a:focus-visible,summary:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bugform{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.bugform label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.bugform input,.bugform textarea,.bugform select{font:inherit;font-size:14px;font-weight:400;color:var(--fg);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);min-width:0}
+.bugform .wide{grid-column:1/-1}
+.sev-Critical{background:var(--fail-bg);color:var(--fail)} .sev-Major{background:var(--block-bg);color:var(--block)} .sev-Moderate{background:var(--accent-soft);color:var(--accent)} .sev-Minor{background:var(--nt-bg);color:var(--nt)}
+.bug{display:flex;flex-direction:column;gap:6px}
+.bug-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.bug pre{white-space:pre-wrap;font:inherit;margin:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.kpi b{display:block;font:700 26px var(--f-display);font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.muted{color:var(--muted)}
+.banner{border-radius:8px;padding:10px 14px;margin-top:14px;font-size:14px}
+.banner.warn{background:var(--block-bg)}
+.banner.err{background:var(--fail-bg)}
+.verdict{border-left:4px solid var(--fail);background:var(--fail-bg);padding:12px 16px;border-radius:6px}
+@media (max-width:600px){details.tc summary{grid-template-columns:minmax(0,1fr)} .tc-chips{justify-content:flex-start} .brand h1{font-size:19px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>AVAL Testing Handbook</h1>
+      <span class="save-note" id="saveNote">Connecting to saved results…</span>
+    </div>
+    <div class="progress" id="bar" aria-hidden="true"></div>
+    <div class="counts" id="counts"></div>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#guide">How to use</a>
+      <a href="#tests">Test cases</a>
+      <a href="#checklist">Checklist</a>
+      <a href="#bugs">Bugs</a>
+      <a href="#report">Summary &amp; readiness</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="storeBanner"></div>
+
+  <!-- ============================ GUIDE ============================ -->
+  <section id="view-guide" data-view="guide">
+    <h2>How to use this handbook</h2>
+    <p>Work through the test cases in order, starting at <span class="mono">TC-001</span>. Each one says what to prepare, exactly what to click or type, and what you should see. After each test, choose <b>Pass</b>, <b>Fail</b>, <b>Blocked</b> (can’t be done yet) or leave it <b>Not tested</b>, write what actually happened, and note your screenshot file name. Everything you enter is saved automatically.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-top:0">What AVAL does</h3>
+        <p>A bridal-accessories shop. Customers browse, add items to a bag, and place an order <b>without an account</b>. Each order gets a private link (<span class="mono">/o/…</span>) where the customer chats with the artisan, pays through Razorpay and tracks delivery. Brides can also request a bespoke design and accept a quote. The shop owner runs everything from <span class="mono">/admin</span>.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Who uses it</h3>
+        <ul>
+          <li><b>Customer</b> (guest, no login): browse, bag, checkout, order page, track order, custom requests, quotes.</li>
+          <li><b>Owner</b> (admin): everything, including Settings and deleting coupons.</li>
+          <li><b>Staff</b> (admin): orders, products, coupons, reviews; cannot save Settings or delete coupons.</li>
+        </ul>
+        <p class="muted">There is no customer registration, login or profile screen, so those phases are not in this handbook.</p>
+      </div>
+    </div>
+
+    <h3>Test types</h3>
+    <div class="tbl"><table>
+      <tr><th>Tag</th><th>Meaning</th></tr>
+      <tr><td><span class="chip t-chip">Positive</span></td><td>Normal use; it should work.</td></tr>
+      <tr><td><span class="chip t-chip">Negative</span></td><td>Wrong input or forbidden action; it should be refused with a clear message.</td></tr>
+      <tr><td><span class="chip t-chip">Edge case</span></td><td>Unusual situations: double clicks, offline, long text, two tabs.</td></tr>
+      <tr><td><span class="chip t-chip">End-to-end</span></td><td>A whole real-life journey across several screens.</td></tr>
+      <tr><td><span class="chip k-chip">Known issue</span></td><td>Already found in the code review; expected to fail until fixed. Test it anyway and record what you see.</td></tr>
+      <tr><td><span class="chip n-chip">Needs DB / setup</span></td><td>Needs Prisma Studio, extra configuration or a deployed site. If you can’t do the setup, mark it <b>Blocked</b> and say why.</td></tr>
+    </table></div>
+
+    <h3>Sample data to use</h3>
+    <div class="tbl"><table>
+      <tr><th>What</th><th>Value</th></tr>
+      <tr><td>Customer 1</td><td>Priya Sundaram · phone 9876500001 · WhatsApp 9876500002 · 12/4B Raja Street, Near Temple, Chennai, Tamil Nadu 600001</td></tr>
+      <tr><td>Customer 2</td><td>Ananya Ramachandran · 9876500005 / 9876500006 · 45 Gandhi Road, Coimbatore, Tamil Nadu 641001</td></tr>
+      <tr><td>Custom request</td><td>Deepika Sundaram · 9876500010 · deepika@example.com · Full Bridal Bangle Set, 2.6, maroon with gold</td></tr>
+      <tr><td>Personalisation</td><td>Priya &amp; Karthik · wedding date a few weeks ahead</td></tr>
+      <tr><td>Coupons to create</td><td>WED10 (10%, min ₹500, public) · VIP100 (₹100 off, private, first 2 uses)</td></tr>
+      <tr><td>Razorpay test payment</td><td>UPI <span class="mono">success@razorpay</span> (works) / <span class="mono">failure@razorpay</span> (fails) · card <span class="mono">4111 1111 1111 1111</span>, any future expiry, any CVV</td></tr>
+      <tr><td>Admin login</td><td>Your owner account (the seeded admin, or the one created with <span class="mono">ADMIN_EMAIL</span>/<span class="mono">ADMIN_PASSWORD</span>)</td></tr>
+    </table></div>
+    <p class="muted">Use phone numbers starting 98765000… so test orders are easy to find and delete later. Name test products and categories starting with “TEST”.</p>
+
+    <h3>UI checks vs database checks</h3>
+    <p>Most checks are done by looking at the shop and the admin screens. Where a test needs to see stored data directly (stock movements, queued emails, staff accounts), open <b>Prisma Studio</b> with <span class="mono">npx prisma studio</span>. Those tests are tagged “Needs DB”.</p>
+
+    <h3>How serious is a bug?</h3>
+    <div class="tbl"><table>
+      <tr><th>Severity</th><th>Use it when</th><th>AVAL example</th></tr>
+      <tr><td><span class="chip sev-Critical">Critical</span></td><td>Money, customer data or ordering is broken; no workaround.</td><td>Customer can pay less than the price; another person can read an order’s address; checkout crashes.</td></tr>
+      <tr><td><span class="chip sev-Major">Major</span></td><td>An important feature fails or gives wrong results; a workaround exists.</td><td>Coupon not applied; stock not returned on cancel; admin can’t dispatch.</td></tr>
+      <tr><td><span class="chip sev-Moderate">Moderate</span></td><td>Works but confusing, inconsistent or partly wrong.</td><td>Wrong message text; filter count off; layout broken on one screen size.</td></tr>
+      <tr><td><span class="chip sev-Minor">Minor</span></td><td>Cosmetic; doesn’t stop anyone.</td><td>Typo, spacing, icon misaligned.</td></tr>
+    </table></div>
+    <p><b>Priority</b> is how soon to fix: <b>P1</b> before launch, <b>P2</b> soon after, <b>P3</b> when convenient. Usually Critical = P1, but a Minor typo on the checkout button can still be P1.</p>
+
+    <h3>Evidence</h3>
+    <p>Take a screenshot (Windows: <span class="mono">Win + Shift + S</span>) or screen recording (<span class="mono">Win + Alt + R</span> with Xbox Game Bar) for every Fail. Name files like <span class="mono">TC-034-checkout-error.png</span> and write the name in the Evidence box.</p>
+  </section>
+
+  <!-- ============================ TESTS ============================ -->
+  <section id="view-tests" data-view="tests" hidden>
+    <h2>Test cases</h2>
+    <p class="muted">In order. Open a test, follow the steps, record the result. Filters only change what you see.</p>
+    <div class="filters" role="group" aria-label="Filter test cases">
+      <label for="fPhase" class="muted" style="font-size:13px">Phase</label>
+      <select id="fPhase"></select>
+      <label for="fStatus" class="muted" style="font-size:13px">Status</label>
+      <select id="fStatus"><option value="">All</option><option>Not Tested</option><option>Pass</option><option>Fail</option><option>Blocked</option></select>
+      <label for="fType" class="muted" style="font-size:13px">Type</label>
+      <select id="fType"><option value="">All</option><option value="P">Positive</option><option value="N">Negative</option><option value="E">Edge case</option><option value="X">End-to-end</option></select>
+      <input id="fText" type="search" placeholder="Search tests" aria-label="Search tests">
+    </div>
+    <div id="testList"></div>
+  </section>
+
+  <!-- ============================ CHECKLIST ============================ -->
+  <section id="view-checklist" data-view="checklist" hidden>
+    <h2>Master checklist</h2>
+    <p class="muted">Every test at a glance. Click an ID to open it.</p>
+    <div class="tbl"><table id="checkTable"><thead><tr><th>ID</th><th>Module</th><th>Scenario</th><th>Type</th><th>Status</th><th>Remarks</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- ============================ BUGS ============================ -->
+  <section id="view-bugs" data-view="bugs" hidden>
+    <h2>Bug log</h2>
+    <p class="muted">Log each problem once, even if several tests show it. Steps should let someone else see the bug without asking you.</p>
+    <form id="bugForm" class="card bugform" autocomplete="off">
+      <label class="wide">Bug title<input id="bTitle" required maxlength="140" placeholder="e.g. Checkout accepts a 9-digit phone number"></label>
+      <label>Module<input id="bModule" maxlength="60" placeholder="Checkout"></label>
+      <label>Related test<input id="bTc" maxlength="20" placeholder="TC-034"></label>
+      <label>Environment / device<input id="bEnv" maxlength="120" placeholder="Windows 11, Chrome 131, localhost"></label>
+      <label>Severity<select id="bSev"><option>Critical</option><option>Major</option><option selected>Moderate</option><option>Minor</option></select></label>
+      <label>Priority<select id="bPri"><option>P1</option><option selected>P2</option><option>P3</option></select></label>
+      <label class="wide">Steps to reproduce<textarea id="bSteps" rows="4" placeholder="1. Open checkout&#10;2. Enter phone 987654321&#10;3. Click Confirm"></textarea></label>
+      <label class="wide">Expected result<textarea id="bExp" rows="2"></textarea></label>
+      <label class="wide">Actual result<textarea id="bAct" rows="2"></textarea></label>
+      <label>Screenshot / recording<input id="bEvid" maxlength="200" placeholder="TC-034-phone.png"></label>
+      <label>Suggested fix<input id="bFix" maxlength="300"></label>
+      <div class="wide" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button type="submit" class="primary">Log bug</button>
+        <span id="bugMsg" class="muted" role="status"></span>
+      </div>
+    </form>
+    <div class="filters" role="group" aria-label="Filter bugs">
+      <label for="bfSev" class="muted" style="font-size:13px">Severity</label>
+      <select id="bfSev"><option value="">All</option><option>Critical</option><option>Major</option><option>Moderate</option><option>Minor</option></select>
+      <label for="bfState" class="muted" style="font-size:13px">State</label>
+      <select id="bfState"><option value="">All</option><option>Open</option><option>Fixed</option><option>Retest passed</option><option>Won't fix</option></select>
+    </div>
+    <div id="bugList"></div>
+  </section>
+
+  <!-- ============================ REPORT ============================ -->
+  <section id="view-report" data-view="report" hidden>
+    <h2>Summary</h2>
+    <div class="kpis" id="kpis"></div>
+    <h3>Progress by phase</h3>
+    <div class="tbl"><table id="phaseTable"><thead><tr><th>Phase</th><th>Total</th><th>Pass</th><th>Fail</th><th>Blocked</th><th>Not tested</th></tr></thead><tbody></tbody></table></div>
+    <h3>Failed tests</h3>
+    <div id="failList" class="muted">None yet.</div>
+    <h3>Open bugs</h3>
+    <div id="openBugs" class="muted">None logged.</div>
+
+    <h2>Release readiness</h2>
+    <div class="verdict"><b>Assessment before your test pass: not ready to launch yet.</b> The core order, payment and admin flows work in testing, but several things customers or the shop rely on are missing. Re-read this after your pass and add what you found.</div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="card"><h3 style="margin-top:0">Must fix before launch</h3><ul>
+        <li>Customers get no email or WhatsApp after placing an order; emails only send when the email job is run by hand.</li>
+        <li>Contact form doesn’t send messages anywhere.</li>
+        <li>Unpaid orders hold stock forever; add automatic expiry.</li>
+        <li>Real product photos (several products share the same photo).</li>
+        <li>Privacy policy, terms and returns pages (Razorpay requires them for live keys).</li>
+        <li>Razorpay live keys and the webhook URL on the deployed site; test one real ₹1 payment and refund.</li>
+        <li>Uploads saved to the server’s disk will be lost on most cloud hosts; move to cloud storage before deploying.</li>
+        <li>Change the seeded admin password; set your real WhatsApp number in Settings.</li>
+      </ul></div>
+      <div class="card"><h3 style="margin-top:0">Should fix soon</h3><ul>
+        <li>Remove or finish the unlinked pages (/order-confirmation shows a fake order).</li>
+        <li>Refunds are manual; add a refund action or a clear checklist for staff.</li>
+        <li>Rate limits reset on restart; use a shared store in production.</li>
+        <li>No staff-management screen; staff accounts need the database.</li>
+        <li>Phone layout of the home page (sideways scroll found in the audit).</li>
+      </ul></div>
+    </div>
+    <h3>Your notes for the release decision</h3>
+    <label for="releaseNotes" class="muted" style="font-size:13px">Saved with your results.</label>
+    <textarea id="releaseNotes" rows="5" style="width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg)" placeholder="Overall feeling, blockers you found, go / no-go."></textarea>
+  </section>
+</main>
+
+<script>
+const PHASES = [{"key": "setup", "title": "Phase 1 · Launch and setup", "intro": "Get the app running and a clean, known starting point. Do these once before each full test round.", "cases": [{"m": "Setup", "s": "Start the app locally", "t": "P", "pre": "Project folder open in a terminal. Node.js installed. The .env file is filled in.", "steps": ["In the terminal, run: npm run dev", "Wait for the line that says the app is ready on http://localhost:3000.", "Open http://localhost:3000 in Chrome."], "exp": ["The terminal shows no red errors.", "The home page loads within a few seconds with the AVAL logo, a banner and product photos.", "No 'Application error' screen appears."], "id": "TC-001"}, {"m": "Setup", "s": "Open the database viewer (for data checks)", "t": "P", "pre": "App running. A second terminal window.", "steps": ["In a second terminal, run: npx prisma studio", "A browser tab opens at http://localhost:5555.", "Click the 'Enquiry' table, then 'Product', then 'Coupon' to see they open."], "exp": ["Prisma Studio lists the tables (Enquiry, Product, Category, Coupon, CustomOrder, Review, Setting…).", "You can see the products in the Product table with their stock numbers.", "Tip: you only LOOK here. Don't edit rows in Studio unless a test says so."], "needs": "db", "id": "TC-002"}, {"m": "Setup", "s": "Record the starting stock and prices", "t": "P", "pre": "Prisma Studio open (or the admin Products page).", "steps": ["Write down the stock of 2 products you will use in tests, e.g. 'Kundan Royal Bridal Bangle Set' and 'Pearl Cluster Hair Pin Set'.", "Write down their selling price."], "exp": ["You have a note of: product name, stock, price. Later tests check stock goes down when an order is placed and back up when it is cancelled."], "id": "TC-003"}, {"m": "Setup", "s": "Prepare two browsers", "t": "P", "pre": "Chrome installed. A second browser (Edge or Firefox) or a Chrome Incognito window.", "steps": ["Browser A (normal Chrome): you act as the CUSTOMER here.", "Browser B (Incognito or Edge): you act as 'someone else' or the ADMIN here.", "In Browser A open DevTools (F12) → Console tab and keep it open during tests."], "exp": ["Two separate browsers are ready. The Console shows no red errors on the home page."], "id": "TC-004"}, {"m": "Setup", "s": "Payment mode check", "t": "P", "pre": "Access to the .env file.", "steps": ["Open .env and check RAZORPAY_KEY_ID starts with rzp_test_.", "Check whether PAYMENTS_SIMULATE is set. For realistic tests leave it unset or 'false'."], "exp": ["Keys are TEST keys (rzp_test_…). Never test with live keys.", "If keys are missing, payment tests will show 'Online payment is temporarily unavailable' — mark them Blocked."], "needs": "setup", "id": "TC-005"}]}, {"key": "first", "title": "Phase 2 · First visit and navigation", "intro": "Use the shop the way a bride visiting for the first time would. There are no customer accounts in AVAL: customers order as guests and use a private order link.", "cases": [{"m": "Home", "s": "Home page loads correctly", "t": "P", "pre": "Browser A, home page open.", "steps": ["Look at the top banner.", "Scroll slowly to the bottom of the page.", "Watch the Console for errors."], "exp": ["Top banner says 'Free shipping on orders of ₹1,500 and above' (or your Settings value) and, if a public coupon exists, 'Use code … for …'.", "Sections appear in order: hero, 4 benefits, Shop by Category, Best Sellers, Wedding Season Offers banner, brand story, Custom Design section, footer.", "Shop by Category only shows categories that have products (no '0 designs' tiles). Counts say '1 design' / '2 designs' correctly.", "No red errors in the Console."], "id": "TC-006"}, {"m": "Home", "s": "Close the announcement banner", "t": "P", "pre": "Home page open.", "steps": ["Click the ✕ on the right of the top banner.", "Refresh the page (F5)."], "exp": ["The banner disappears when closed.", "After refresh the banner is back (this is expected: it is not remembered)."], "id": "TC-007"}, {"m": "Navigation", "s": "Header menu links", "t": "P", "pre": "Desktop window, at least 1200px wide.", "steps": ["Click 'Shop All'.", "Go back. Click each category name in the header.", "Click 'Custom Order', then 'Offers'.", "Click the Wishlist, Track Order and Bag icons on the right.", "Click the AVAL logo."], "exp": ["Every link opens a page with content — none shows a 404.", "Category links open /category/<name> pages listing real products.", "The logo returns to the home page.", "There is only one 'Track Order' entry in the header (as an icon on the right)."], "id": "TC-008"}, {"m": "Navigation", "s": "Footer links", "t": "P", "pre": "Any page, scroll to the footer.", "steps": ["Click every link in the footer one by one (Shop, categories, Offers, About, Contact, FAQ, Shipping, Track Order, Custom Order).", "Click the Instagram link."], "exp": ["Each internal link opens a working page.", "Footer category links match the categories in the header.", "Instagram opens in a new tab (the account itself may or may not exist — note it in Remarks)."], "id": "TC-009"}, {"m": "Navigation", "s": "Back and forward buttons", "t": "P", "pre": "Browser A.", "steps": ["Visit Home → Shop → a product → Bag.", "Press the browser Back button 3 times.", "Press Forward twice."], "exp": ["Each Back/Forward shows the right page with its content.", "Your bag still contains anything you added."], "id": "TC-010"}, {"m": "Navigation", "s": "Unknown address shows a 404 page", "t": "N", "pre": "Browser A.", "steps": ["Open http://localhost:3000/this-page-does-not-exist", "Open http://localhost:3000/product/not-a-real-product", "Open http://localhost:3000/category/not-a-real-category"], "exp": ["Each shows a 'not found' page instead of a broken page or a made-up product."], "id": "TC-011"}, {"m": "Navigation", "s": "Pages that are not linked anywhere", "t": "E", "pre": "Browser A.", "steps": ["Open /search", "Open /account", "Open /order-confirmation"], "exp": ["/search: a working search page (it is not linked from the menu — decide if it should be).", "/account: says there is no account and redirects to Track Order after about 1.5 seconds.", "/order-confirmation: should NOT show a fake order."], "known": "/order-confirmation still shows a sample order (AVL-9842) with made-up details. /search and /account are not linked from any menu.", "id": "TC-012"}]}, {"key": "catalogue", "title": "Phase 3 · Browsing the catalogue", "intro": "Shop, category, product, search, wishlist and offers pages.", "cases": [{"m": "Shop", "s": "Shop page lists real products", "t": "P", "pre": "Browser A.", "steps": ["Click 'Shop All'.", "Count the products shown.", "Compare with the active products in admin → Products."], "exp": ["The number matches the products that are not hidden.", "Each card shows photo, name, price, crossed-out regular price (if discounted) and a % OFF badge.", "Text says 'Showing N designs' with the right number."], "id": "TC-013"}, {"m": "Shop", "s": "Filter by category", "t": "P", "pre": "Shop page open.", "steps": ["Click each category chip.", "Click 'All' (or the reset option)."], "exp": ["Only that category's products appear.", "All products return when the filter is cleared.", "A category with nothing matching shows 'No designs match these filters'."], "id": "TC-014"}, {"m": "Shop", "s": "Sort by price", "t": "P", "pre": "Shop page open.", "steps": ["Choose 'Price: Low to High'.", "Choose 'Price: High to Low'.", "Choose 'Featured / Best Sellers'."], "exp": ["Prices go up, then down, in the right order.", "Featured puts best sellers first."], "id": "TC-015"}, {"m": "Shop", "s": "'Customisable only' filter", "t": "P", "pre": "Shop page open.", "steps": ["Turn on the customisable-only option.", "Turn it off."], "exp": ["Only products offering personalisation stay visible.", "All products return when off."], "id": "TC-016"}, {"m": "Shop", "s": "Quick add from the shop grid", "t": "P", "pre": "Shop page open, bag empty.", "steps": ["Click '+ Add to Bag' on one product.", "Look at the Bag icon in the header."], "exp": ["A message confirms it was added.", "The Bag icon shows 1.", "In the bag, the item uses the product's first size."], "id": "TC-017"}, {"m": "Category", "s": "Category page", "t": "P", "pre": "Browser A.", "steps": ["Open a category from the header.", "Read the banner and product list.", "Open a category that has no products (if one exists, e.g. via admin)."], "exp": ["The banner shows the category name and description from admin.", "Only that category's products are listed.", "An empty category says new designs are being handcrafted and offers 'Browse all designs'."], "id": "TC-018"}, {"m": "Product", "s": "Product page details", "t": "P", "pre": "Browser A.", "steps": ["Open 'Kundan Royal Bridal Bangle Set'.", "Click each thumbnail photo.", "Read the details.", "Look at the browser tab title."], "exp": ["Main photo changes when a thumbnail is clicked.", "Name, category, price, regular price, % saved, description and specification bullets appear.", "Tab title is '<product name> | AVAL Store'.", "Star rating appears ONLY if the product has approved reviews (no made-up '4.8 (24 reviews)')."], "id": "TC-019"}, {"m": "Product", "s": "Choose size and quantity", "t": "P", "pre": "Product page open.", "steps": ["Click each size button.", "Click + until it stops.", "Click − until it stops."], "exp": ["The chosen size is highlighted.", "+ stops at the stock level (or 20, whichever is lower).", "− stops at 1.", "The 'Add to Bag • ₹…' button updates the total as quantity changes."], "id": "TC-020"}, {"m": "Product", "s": "Personalisation adds ₹200", "t": "P", "pre": "Product that offers personalisation.", "steps": ["Type 'Priya & Karthik' in the names box.", "Pick a wedding date.", "Look at the Add to Bag price.", "Clear the names box."], "exp": ["Price goes up by exactly ₹200 per item when names are entered.", "Price drops back when the names box is empty."], "id": "TC-021"}, {"m": "Product", "s": "Add to bag and Buy Now", "t": "P", "pre": "Product page open, bag empty.", "steps": ["Click 'Add to Bag'.", "Click 'View Bag' in the pop-up message.", "Go back. Click 'Buy Now with Express Checkout'."], "exp": ["A message confirms the item and size.", "The bag shows the item with your size, names and price.", "Buy Now adds the item again and opens the bag."], "id": "TC-022"}, {"m": "Product", "s": "Sold-out product", "t": "E", "pre": "In admin → Inventory, set a test product's stock to 0 (note the old number to restore it).", "steps": ["Open that product page.", "Try to add it from the Shop grid."], "exp": ["The main button says 'Out of stock' and is disabled. 'Buy Now' is hidden.", "Quick add on the Shop grid shows '<name> is out of stock'.", "Restore the stock afterwards."], "id": "TC-023"}, {"m": "Product", "s": "WhatsApp 'Customise' link", "t": "P", "pre": "Product page open.", "steps": ["Click '💬 Customise on WhatsApp'."], "exp": ["WhatsApp (web or app) opens to the store number from admin Settings with a message naming the product and size."], "id": "TC-024"}, {"m": "Wishlist", "s": "Save and remove wishlist items", "t": "P", "pre": "Browser A.", "steps": ["On a product page click '♡ Save to wishlist'.", "Open the Wishlist (heart icon).", "Click 'Move to Bag' on one item.", "Save another, then remove it.", "Refresh the page."], "exp": ["The button changes to '♥ Saved to wishlist'.", "The wishlist shows saved products with photo and price.", "Move to Bag adds it to the bag and removes it from the wishlist.", "Items stay after refresh.", "Note: the wishlist is saved on this device only. Browser B will not see it (expected)."], "id": "TC-025"}, {"m": "Offers", "s": "Offers page shows real coupons", "t": "P", "pre": "At least one active coupon with 'Everyone, no total limit' (create one in admin → Coupons, e.g. WED10, 10%).", "steps": ["Open 'Offers'.", "Click 'Apply to bag' on a coupon.", "Open the bag."], "exp": ["Only active, public, in-date coupons are listed with their discount, minimum order and end date.", "After applying, the button says 'Applied'.", "The bag shows the coupon applied (once it has items meeting the minimum)."], "id": "TC-026"}, {"m": "Offers", "s": "No public coupons", "t": "E", "pre": "No active public coupons (switch them off in admin).", "steps": ["Open 'Offers'."], "exp": ["The page says there are no open offers right now and shows 'Browse the collection'. No fake coupons appear."], "id": "TC-027"}, {"m": "Search", "s": "Search page", "t": "P", "pre": "Browser A.", "steps": ["Open /search.", "Type 'kundan', then 'KUNDAN', then 'pearl'.", "Type 'zzzz'."], "exp": ["Matching products appear and capital letters don't matter.", "A word with no match shows an empty result (check the message is friendly)."], "id": "TC-028"}]}, {"key": "bag", "title": "Phase 4 · Bag and pricing", "intro": "Every price shown in the bag and checkout comes from the server, so the customer pays exactly what they see.", "cases": [{"m": "Bag", "s": "Change quantity and remove", "t": "P", "pre": "Bag with 2 different items.", "steps": ["Click + on one item.", "Click − back.", "Click 'Remove' on one item.", "Remove the last item."], "exp": ["Subtotal and total update each time (after a brief moment).", "Removing the last item shows the empty-bag screen with a link to shop.", "The Bag icon count matches."], "id": "TC-029"}, {"m": "Bag", "s": "Shipping below and above the free threshold", "t": "P", "pre": "Settings: free shipping from ₹1,500, fee ₹99 (defaults).", "steps": ["Add only 'Pearl Cluster Hair Pin Set' (₹699).", "Read the shipping line.", "Increase quantity until the subtotal is over ₹1,500."], "exp": ["Below ₹1,500: Shipping ₹99 and a hint 'Add ₹… more for free shipping'.", "At ₹1,500 or more: Shipping FREE and the hint disappears."], "id": "TC-030"}, {"m": "Bag", "s": "Apply a valid coupon", "t": "P", "pre": "A coupon exists, e.g. WED10 = 10% off, minimum ₹500.", "steps": ["Add an item worth more than ₹500.", "Type 'wed10' (lower case) and click Apply.", "Read the totals."], "exp": ["Message 'Coupon WED10 applied.'", "A 'Coupon Discount (WED10) − ₹…' line appears. 10% of the subtotal, paise shown like ₹189.90.", "Total = subtotal − discount + shipping."], "id": "TC-031"}, {"m": "Bag", "s": "Invalid, expired and below-minimum coupons", "t": "N", "pre": "Coupons: one switched off, one expired (end date in the past), one with minimum ₹5,000.", "steps": ["Apply 'NOTACODE'.", "Apply the switched-off coupon.", "Apply the expired coupon.", "Apply the ₹5,000-minimum coupon with a small bag."], "exp": ["'This coupon code is not valid.'", "Same for the switched-off one.", "'This coupon has expired.'", "'Add items worth ₹5,000 or more to use this coupon.'", "No discount is applied in any case."], "id": "TC-032"}, {"m": "Bag", "s": "Remove a coupon / coupon stops being valid", "t": "P", "pre": "Coupon applied in the bag.", "steps": ["Click 'Remove' next to the applied coupon.", "Apply it again, then reduce the bag below the coupon minimum."], "exp": ["Discount disappears after Remove.", "When the bag drops below the minimum, a message explains the coupon no longer applies, with a Remove link."], "id": "TC-033"}, {"m": "Bag", "s": "Bag survives refresh and a new tab", "t": "P", "pre": "Bag with items and a coupon.", "steps": ["Refresh the page.", "Open the site in a second tab of the same browser and add another item there.", "Go back to the first tab."], "exp": ["Items and coupon are still there after refresh.", "The first tab updates to show the item added in the second tab.", "No red 'Hydration failed' error appears in the Console."], "id": "TC-034"}, {"m": "Bag", "s": "Old/unknown items in the bag", "t": "E", "pre": "Bag contains an item you then hide in admin → Products ('Remove').", "steps": ["Refresh the bag."], "exp": ["A clear message says one or more items are no longer available and asks to remove them. The total is not trusted until it is removed."], "id": "TC-035"}]}, {"key": "checkout", "title": "Phase 5 · Checkout (placing an order)", "intro": "Customers order without an account. On success they get a private order link and pay after confirming the design.", "cases": [{"m": "Checkout", "s": "Place an order with valid details", "t": "P", "pre": "Bag with the Kundan set (size 2.4, names 'Priya & Karthik'). Starting stock noted.", "steps": ["Click 'Proceed to Checkout'.", "Enter: Name 'Priya Sundaram', Phone 9876500001, WhatsApp 9876500002, Street '12/4B Raja Street, Near Temple', City 'Chennai', State 'Tamil Nadu', Pincode 600001.", "Check the order summary on the right.", "Click 'Confirm & Place Order'."], "exp": ["Summary shows the same subtotal, coupon, shipping and total as the bag.", "You land on the 'Order placed' page with a private link (/o/…).", "The bag is now empty.", "In admin → Bridal Orders the new order appears as 'Awaiting payment / Unpaid'.", "Product stock went down by the quantity ordered (admin → Inventory)."], "id": "TC-036"}, {"m": "Checkout", "s": "Empty form", "t": "N", "pre": "Checkout open with items.", "steps": ["Click 'Confirm & Place Order' without typing anything."], "exp": ["The browser highlights the first required field. Nothing is submitted."], "id": "TC-037"}, {"m": "Checkout", "s": "Invalid phone, WhatsApp and pincode", "t": "N", "pre": "Checkout open with items.", "steps": ["Fill everything validly but Phone '12345'. Submit.", "Fix phone; WhatsApp '0123456789'. Submit.", "Fix WhatsApp; Pincode '12'. Submit.", "Street 'abc'. Submit."], "exp": ["Each time a clear red message names the problem: 'Enter a valid 10-digit phone number.', '…WhatsApp number.', 'Enter a 6-digit pincode.', 'Enter your full street address.'", "The page never goes blank or crashes."], "id": "TC-038"}, {"m": "Checkout", "s": "Phone with +91 and spaces", "t": "E", "pre": "Checkout open with items.", "steps": ["Enter WhatsApp as '+91 98765 00003' and place the order."], "exp": ["Order is accepted. In admin the WhatsApp number shows as 9876500003 (10 digits)."], "id": "TC-039"}, {"m": "Checkout", "s": "Ordering more than in stock", "t": "N", "pre": "A product with low stock (e.g. set stock to 2 in admin).", "steps": ["Add 3 of it to the bag (or 2 from two tabs, then 1 more).", "Go to checkout and submit."], "exp": ["Bag or checkout shows 'Only 2 of \"…\" left. Please reduce the quantity.' No order is created."], "id": "TC-040"}, {"m": "Checkout", "s": "Coupon used twice by the same customer", "t": "N", "pre": "Coupon WED10 (1 use per customer). An order already placed with WED10 using WhatsApp 9876500002.", "steps": ["Place a new order with WED10 and the same WhatsApp number."], "exp": ["'You have already used this coupon.' No order is created. A different WhatsApp number can still use it."], "id": "TC-041"}, {"m": "Checkout", "s": "Double-click 'Confirm & Place Order'", "t": "E", "pre": "Checkout filled in.", "steps": ["Double-click the button quickly."], "exp": ["Only ONE order is created (check admin → Bridal Orders). The button shows 'Submitting Order…' while working."], "id": "TC-042"}, {"m": "Checkout", "s": "Order-placed page actions", "t": "P", "pre": "Just placed an order.", "steps": ["Click 'Copy Link'.", "Paste it in Notepad.", "Click 'Send Link to My WhatsApp'.", "Click 'Open My Order & Chat with Artisan'."], "exp": ["The copied link is http://localhost:3000/o/<12-character code>.", "WhatsApp opens with the link in the message.", "The order page opens WITHOUT asking for the 4 digits (this browser placed the order)."], "id": "TC-043"}, {"m": "Checkout", "s": "Refresh or go back after ordering", "t": "E", "pre": "On the Order-placed page.", "steps": ["Refresh.", "Press Back."], "exp": ["Refresh keeps the order link visible.", "Back shows checkout with an empty bag ('Your Bag is Empty'); no second order is created."], "id": "TC-044"}]}, {"key": "orderpage", "title": "Phase 6 · Customer's private order page", "intro": "The order link is the customer's account. It must stay private to them.", "cases": [{"m": "Order page", "s": "Order page content", "t": "P", "pre": "Order placed in Browser A.", "steps": ["Open the order link in Browser A.", "Read each section of 'Status & Details'."], "exp": ["Order reference, status banner ('Awaiting Payment Confirmation'), items with size and personalisation, subtotal/coupon/shipping/total, delivery address, timeline."], "id": "TC-045"}, {"m": "Order page", "s": "Someone else opens the link", "t": "N", "pre": "Order link copied.", "steps": ["Paste the link into Browser B (Incognito).", "Enter 4 WRONG digits and click 'Unlock My Order Details'.", "Enter the last 4 digits of the WhatsApp number."], "exp": ["Browser B first sees 'Verify Private Order Link' — no name, phone or address.", "Wrong digits: 'Incorrect number. Please try again.'", "Correct digits open the order."], "id": "TC-046"}, {"m": "Order page", "s": "Too many wrong attempts", "t": "N", "pre": "A fresh order link in Browser B (not yet verified).", "steps": ["Enter wrong digits 6 times in a row."], "exp": ["After 5 tries: 'Too many attempts. Please try again in … minutes.' Even the right digits are refused until the wait ends."], "id": "TC-047"}, {"m": "Order page", "s": "Chat with the artisan", "t": "P", "pre": "Order page open in Browser A; admin → Bridal Orders open on the same order in Browser B.", "steps": ["In Browser A open 'Artisan Chat' and send 'Can the bangles be maroon?'.", "In Browser B reply 'Yes, maroon works.'"], "exp": ["Each message appears on the other side within about 2 seconds without refreshing.", "Customer messages are labelled as the customer; replies labelled as the artisan."], "id": "TC-048"}, {"m": "Order page", "s": "Rating after delivery", "t": "P", "pre": "Order marked Delivered in admin.", "steps": ["Refresh the order page.", "Open the 'Rate Order' tab, choose 4 stars, write a comment, submit.", "Refresh again."], "exp": ["A rating tab appears only after delivery.", "Submitting thanks the customer.", "The rating tab disappears (one rating per order).", "Admin → Reviews shows a new review 'Waiting for approval' for each product in the order."], "id": "TC-049"}, {"m": "Order page", "s": "Wrong or broken link", "t": "N", "pre": "Browser A.", "steps": ["Open http://localhost:3000/o/ABCDEFGHJKMN"], "exp": ["'Order link not found' with a 'Find my order' button."], "id": "TC-050"}]}, {"key": "payment", "title": "Phase 7 · Payment (Razorpay test mode)", "intro": "Uses Razorpay TEST keys only. No real money moves. Use Razorpay's test details: UPI ID success@razorpay (success) or failure@razorpay (failure); test card 4111 1111 1111 1111, any future expiry, any CVV.", "cases": [{"m": "Payment", "s": "Successful payment", "t": "P", "pre": "Unpaid order open in Browser A. Test keys configured.", "steps": ["Click 'Pay Now' / 'Complete Payment'.", "In the Razorpay window choose UPI and enter success@razorpay (or the test card).", "Complete the test payment."], "exp": ["Razorpay opens with the exact order total.", "After paying, the order page refreshes to status 'Confirmed' / Paid.", "Admin → Bridal Orders shows it Paid and Confirmed; Dashboard 'Revenue collected' increases."], "needs": "setup", "id": "TC-051"}, {"m": "Payment", "s": "Failed or cancelled payment", "t": "N", "pre": "Unpaid order open.", "steps": ["Click Pay, then close the Razorpay window without paying.", "Click Pay again and use failure@razorpay."], "exp": ["The order stays 'Awaiting payment'. You can try again.", "No status changes to Paid."], "needs": "setup", "id": "TC-052"}, {"m": "Payment", "s": "Payment keys missing", "t": "E", "pre": "Temporarily remove RAZORPAY_KEY_ID from .env and restart (restore after).", "steps": ["Click Pay on an unpaid order."], "exp": ["'Online payment is temporarily unavailable. Please message us in the chat.' The order is NOT marked paid."], "needs": "setup", "id": "TC-053"}, {"m": "Payment", "s": "Webhook (production only)", "t": "E", "pre": "A public URL for the app (not localhost) and a webhook set in the Razorpay dashboard.", "steps": ["Pay an order, then in Razorpay check the webhook delivery log."], "exp": ["Webhook returns 200. A paid order that was cancelled first gets 'REFUND REQUIRED' in admin notes instead of reopening."], "needs": "setup", "known": "Webhooks cannot reach localhost. Locally, payment is confirmed through the checkout callback instead. Mark Blocked until deployed.", "id": "TC-054"}]}, {"key": "track", "title": "Phase 8 · Track order", "intro": "Customers who lost their link find their order with the order code plus the phone number they used.", "cases": [{"m": "Track order", "s": "Find an order with code and phone", "t": "P", "pre": "An order code (the 12 characters after /o/) and its WhatsApp number.", "steps": ["Open 'Track Order' in Browser B.", "Enter the order code and the WhatsApp number. Click 'Track Order'.", "Repeat pasting the full link instead of the code, and the phone number instead of WhatsApp."], "exp": ["You are taken straight into that order page (no 4-digit step needed).", "Full link and phone number also work."], "id": "TC-055"}, {"m": "Track order", "s": "Wrong details", "t": "N", "pre": "Same order.", "steps": ["Correct code + wrong phone.", "Phone only, no code.", "Code + only 4 digits of the phone."], "exp": ["Wrong phone: 'No order found with those details…'", "Missing code or partial phone: a message asking for the order reference and the full 10-digit phone.", "Never shows another customer's details."], "id": "TC-056"}, {"m": "Track order", "s": "Too many searches", "t": "E", "pre": "Browser B.", "steps": ["Search with wrong details 11 times quickly."], "exp": ["After 10: 'Too many searches. Please try again in a few minutes.'"], "id": "TC-057"}]}, {"key": "custom", "title": "Phase 9 · Custom design requests and quotes (customer side)", "intro": "A bride requests a bespoke design, receives a quote link, accepts it with her delivery address and pays like a normal order.", "cases": [{"m": "Custom order", "s": "Submit a custom request", "t": "P", "pre": "Browser A.", "steps": ["Open 'Custom Order'.", "Enter: Name 'Deepika Sundaram', WhatsApp 9876500010, Email deepika@example.com, Accessory 'Full Bridal Bangle Set', Size 2.6, Colour 'Maroon with gold', Names 'Deepika & Arun • 20-01-2027', Event date (pick a date), Notes 'Need by early January'.", "Submit."], "exp": ["A thank-you message names her and her number.", "Admin → Custom Requests shows the request under 'Needs action' with all the details."], "id": "TC-058"}, {"m": "Custom order", "s": "Custom request validation", "t": "N", "pre": "Custom Order page.", "steps": ["Submit empty.", "Enter an invalid email 'deepika@'.", "Leave the event date empty."], "exp": ["Required fields are highlighted; nothing is sent until fixed."], "id": "TC-059"}, {"m": "Quote", "s": "Open and accept a quote", "t": "P", "pre": "Admin has sent a quote (Phase 13). You have the quote link (/quote/…).", "steps": ["Open the quote link in Browser B.", "Read the price and note.", "Click 'Accept & continue to payment'.", "Enter WhatsApp 9876500011, address, pincode 600001. Confirm."], "exp": ["Quote shows the request, price 'including delivery', artisan note and 'Valid until' date.", "Confirming takes you to a new private order page for the quoted amount.", "Admin → Bridal Orders shows it with note 'From custom request…'; Custom Requests shows 'Accepted'."], "id": "TC-060"}, {"m": "Quote", "s": "Decline, expired and already-answered quotes", "t": "N", "pre": "Quote links in different states.", "steps": ["Decline a quote with a reason.", "Open an accepted quote link again.", "Open a quote whose 'valid for' days have passed (or ask admin to send one valid 1 day and test the next day)."], "exp": ["Decline thanks the customer; admin sees 'Declined' and the reason.", "Accepted link says 'You accepted this quote' with 'Open my order'.", "Expired: 'This quote has expired. Message us…' — no Accept button.", "A bad pincode on Accept shows 'Enter a 6-digit pincode'."], "id": "TC-061"}]}, {"key": "info", "title": "Phase 10 · Information pages and contact", "intro": "About, FAQ, Shipping and Contact.", "cases": [{"m": "Info", "s": "About, FAQ and Shipping pages", "t": "P", "pre": "Browser A.", "steps": ["Open About, FAQ and Shipping from the footer.", "On FAQ click each question."], "exp": ["Pages load with readable content. FAQ answers open and close.", "Check the shipping page text matches your real policy and the ₹1,500 free-shipping rule (note any mismatch)."], "id": "TC-062"}, {"m": "Contact", "s": "Contact details come from Settings", "t": "P", "pre": "Admin Settings WhatsApp number and email known.", "steps": ["Open Contact.", "Click the WhatsApp link."], "exp": ["Shown WhatsApp number and email match admin → Settings.", "WhatsApp opens to that number."], "id": "TC-063"}, {"m": "Contact", "s": "Contact form sends a message", "t": "P", "pre": "Contact page.", "steps": ["Fill name, email, phone and message. Send.", "Check admin for the message."], "exp": ["The message should reach the shop (admin or email)."], "known": "The contact form only shows a thank-you screen. The message is not saved or emailed anywhere. Expected to FAIL.", "id": "TC-064"}]}, {"key": "adminaccess", "title": "Phase 11 · Admin login and access", "intro": "Admin roles: OWNER (everything) and STAFF (no Settings saving, no coupon deleting). Customers have no admin access.", "cases": [{"m": "Admin login", "s": "Log in", "t": "P", "pre": "Browser B. Your admin email and password.", "steps": ["Open http://localhost:3000/admin.", "You are sent to the login page. Sign in."], "exp": ["Logged-out visit to /admin redirects to /admin/login.", "After sign-in you land on the Dashboard (or the page you originally asked for)."], "id": "TC-065"}, {"m": "Admin login", "s": "Login errors", "t": "N", "pre": "Login page.", "steps": ["Click Sign In with empty fields.", "Correct email, wrong password.", "Unknown email."], "exp": ["'Please enter both email and password.'", "'Invalid email or password' for both wrong cases (doesn't reveal which).", "The page does not show any email or password hints."], "id": "TC-066"}, {"m": "Admin login", "s": "Too many login attempts", "t": "E", "pre": "Login page.", "steps": ["Enter a wrong password 11 times for the same email."], "exp": ["After 10 attempts: 'Too many attempts. Please try again in … minutes.'"], "id": "TC-067"}, {"m": "Admin", "s": "Sidebar and top bar", "t": "P", "pre": "Logged in, desktop window wider than 1024px.", "steps": ["Click every sidebar item.", "Look at the top-right 'Awaiting payment' badge.", "Click 'View Live Storefront'."], "exp": ["Every page loads real data (no sample names like 'Priya Sundaram' you didn't create).", "Badge count = unpaid, not-cancelled orders (matches 'Pending payment' on Bridal Orders).", "Storefront opens."], "id": "TC-068"}, {"m": "Admin", "s": "Sign out", "t": "P", "pre": "Logged in.", "steps": ["Click 'Sign out' in the sidebar.", "Press Back.", "Open /admin/products directly."], "exp": ["You are on the login page.", "Back does not show admin data; you are sent to login."], "id": "TC-069"}, {"m": "Admin", "s": "Staff permissions", "t": "P", "pre": "A STAFF user (needs creating in the database: a User row with role STAFF).", "steps": ["Log in as staff.", "Try saving Settings.", "Try deleting an unused coupon."], "exp": ["Staff can manage orders, products and coupons.", "Saving Settings and deleting coupons are refused with a 'permission' message."], "needs": "db", "id": "TC-070"}]}, {"key": "adminorders", "title": "Phase 12 · Admin: Bridal Orders", "intro": "Where every customer order is handled from payment to delivery.", "cases": [{"m": "Bridal Orders", "s": "Order details panel", "t": "P", "pre": "The order from TC 'Place an order with valid details'.", "steps": ["Open Bridal Orders and click the order."], "exp": ["Panel shows: placed date/time, Unpaid tag, each item with size, personalisation and wedding date, subtotal, coupon, shipping, total, full delivery address, phone and WhatsApp.", "'Copy full link' copies http://localhost:3000/o/…", "'Open WhatsApp' opens wa.me/91<number>."], "id": "TC-071"}, {"m": "Bridal Orders", "s": "Unpaid orders can't go to production", "t": "N", "pre": "Unpaid order selected.", "steps": ["Look for a 'Start handcrafting' button."], "exp": ["Only 'Mark as paid' and 'Cancel order' are offered. No way to start handcrafting or ship an unpaid order."], "id": "TC-072"}, {"m": "Bridal Orders", "s": "Record a UPI payment", "t": "P", "pre": "Unpaid order selected.", "steps": ["Choose 'UPI', type reference 'UTR123456', click 'Mark as paid'."], "exp": ["Message 'Payment recorded. The order is confirmed.'", "Status becomes Confirmed, tag Paid; note 'Payment of ₹… recorded manually (UPI, ref UTR123456)…'.", "Customer's order page shows Confirmed."], "id": "TC-073"}, {"m": "Bridal Orders", "s": "Full fulfilment path", "t": "P", "pre": "Paid, confirmed order.", "steps": ["Click 'Start handcrafting'.", "Type tracking 'AB' and click 'Save & dispatch'.", "Type 'BD12345678' and 'Save & dispatch'.", "Type 'BD87654321' and 'Update tracking'.", "Click 'Mark delivered'."], "exp": ["Status: Handcrafting → error 'Enter the full tracking number' → Dispatched with tracking → tracking corrected → Delivered.", "After dispatch the Cancel option disappears. After delivery no actions remain.", "Customer's page shows each status and the tracking number."], "id": "TC-074"}, {"m": "Bridal Orders", "s": "Cancel an unpaid order", "t": "P", "pre": "Unpaid order. Stock of its product noted.", "steps": ["Click 'Cancel order'.", "Click 'Keep order'.", "Click 'Cancel order' then 'Yes, cancel order'."], "exp": ["A confirmation explains stock goes back on sale.", "'Keep order' leaves it unchanged.", "After confirming: status Cancelled, product stock back up by the quantity."], "id": "TC-075"}, {"m": "Bridal Orders", "s": "Cancel a paid order", "t": "P", "pre": "A paid, confirmed order.", "steps": ["Cancel it (confirm)."], "exp": ["Status Cancelled with a red note 'REFUND REQUIRED: order cancelled after payment.'", "Dashboard shows a refund alert."], "known": "Refunds are not processed automatically — the owner must refund in Razorpay manually.", "id": "TC-076"}, {"m": "Bridal Orders", "s": "Filters and refresh", "t": "P", "pre": "Orders in several statuses.", "steps": ["Click each filter tab (enquiry, confirmed, making, dispatched, delivered, cancelled).", "Click Refresh."], "exp": ["Each tab lists only orders in that status; the top cards count correctly."], "id": "TC-077"}, {"m": "Bridal Orders", "s": "Switching orders resets the form", "t": "E", "pre": "Two orders.", "steps": ["On order 1 click 'Cancel order' (don't confirm). Click order 2 in the list."], "exp": ["Order 2 does NOT show the cancel confirmation — you can't accidentally cancel the wrong order."], "id": "TC-078"}]}, {"key": "admincustom", "title": "Phase 13 · Admin: Custom Requests", "intro": "Quote bespoke requests and follow them to completion.", "cases": [{"m": "Custom Requests", "s": "Send a quote", "t": "P", "pre": "The request from Phase 9.", "steps": ["Open Custom Requests, click the request.", "Enter price 3500, valid 7 days, note 'Maroon silk set with gold Kundan, ready in 10 days.' Click 'Send quote'."], "exp": ["'Quote saved and emailed…' message.", "Links appear: 'Customer quote page' and 'Send link on WhatsApp' (wa.me/91…).", "Status Quote sent; it moves to 'Waiting on customer'."], "id": "TC-079"}, {"m": "Custom Requests", "s": "Quote validation and re-quoting", "t": "N", "pre": "Request selected.", "steps": ["Send with price 0.", "Send with an empty note.", "After the customer accepts, try sending another quote."], "exp": ["'Enter the quote amount in rupees.'", "'Add a short note…'", "After acceptance the quote form is gone (re-quoting is blocked)."], "id": "TC-080"}, {"m": "Custom Requests", "s": "Production and close", "t": "P", "pre": "Accepted request.", "steps": ["Click 'Mark in production', then 'Mark completed'.", "On another request click 'Close request'."], "exp": ["Statuses move Accepted → In production → Completed.", "Closed requests go to 'Done / closed'."], "id": "TC-081"}]}, {"key": "admincatalogue", "title": "Phase 14 · Admin: Products, Categories, Inventory", "intro": "Create test items with names starting 'TEST' so you can find and remove them afterwards.", "cases": [{"m": "Categories", "s": "Create, edit and hide a category", "t": "P", "pre": "Admin → Categories.", "steps": ["Add category 'TEST Category', description, Order 9. Save.", "Edit it: upload a JPG cover photo. Save.", "Untick 'Show in store'. Save."], "exp": ["New category listed as 'Hidden (empty)' with its address /category/test-category.", "Cover photo updates.", "Hidden tag shows; it disappears from the storefront menu."], "id": "TC-082"}, {"m": "Categories", "s": "Delete rules", "t": "N", "pre": "A category with products and the empty TEST category.", "steps": ["Click Delete on a category that has products.", "Delete the empty TEST category."], "exp": ["With products: the dialog explains it can't be deleted and offers no Delete button.", "Empty one is deleted."], "id": "TC-083"}, {"m": "Products", "s": "Add a product", "t": "P", "pre": "Admin → Products.", "steps": ["Click 'Add product'. Name 'TEST Bangle', category, Regular 1500, Selling 1200, stock 5, sizes '2.4, 2.6', two bullet lines, tick 'New arrival'. Add a photo. Save."], "exp": ["'Product added. It is now live in the store.'", "It appears in the list with the right category, price, stock and sizes, and on the storefront."], "id": "TC-084"}, {"m": "Products", "s": "Product form validation", "t": "N", "pre": "Add product form.", "steps": ["Selling price 1600 with regular 1500.", "No photo.", "Upload a .svg or .pdf file as a photo.", "Upload a JPG larger than 5 MB."], "exp": ["'The selling price can’t be higher than the regular price.'", "'Add at least one photo.'", "'Only JPG, PNG or WebP images are allowed'", "'Images must be under 5 MB'"], "id": "TC-085"}, {"m": "Products", "s": "Edit a product", "t": "P", "pre": "TEST Bangle exists.", "steps": ["Edit: change category, tick Best seller, change the name to 'TEST Bangle Royal'. Save.", "Open its store page."], "exp": ["Changes save. The store page address follows the new name and shows the new details."], "id": "TC-086"}, {"m": "Products", "s": "Remove and restore", "t": "P", "pre": "TEST Bangle has stock history (it does after Inventory changes).", "steps": ["Click Remove → confirm.", "Tick 'Show hidden products' → 'Show in store'."], "exp": ["Message says it was hidden instead of deleted because it has history; the store page now returns not found.", "Restoring brings it back to the store."], "id": "TC-087"}, {"m": "Inventory", "s": "Adjust stock with a reason", "t": "P", "pre": "Admin → Inventory.", "steps": ["For TEST Bangle enter 3, reason 'New stock made', note 'Batch 1'. Apply.", "Enter -2, reason 'Damaged / lost'. Apply.", "Click +5."], "exp": ["Each change shows '…stock is now N' and the number updates.", "Tags: Sold out at 0, '· low' at 5 or fewer."], "id": "TC-088"}, {"m": "Inventory", "s": "Can't go below zero", "t": "N", "pre": "A product with stock 3.", "steps": ["Enter -10 and Apply."], "exp": ["'Only 3 in stock, so it can't go down by that much.' Stock unchanged."], "id": "TC-089"}]}, {"key": "admincoupons", "title": "Phase 15 · Admin: Coupons", "intro": "Codes customers type in the bag.", "cases": [{"m": "Coupons", "s": "Create a public coupon", "t": "P", "pre": "Admin → Coupons.", "steps": ["New coupon: code WED10, description '10% off for wedding season', Percentage 10, minimum 500, 1 use per customer, no dates, 'Everyone, no total limit', switched on."], "exp": ["Listed as Live, Public, 'Once per customer'.", "Appears on the storefront Offers page and in the top banner."], "id": "TC-090"}, {"m": "Coupons", "s": "Coupon validation", "t": "N", "pre": "Coupons page.", "steps": ["Create WED10 again.", "Percentage 95.", "End date before start date.", "Code with spaces or symbols."], "exp": ["'A coupon with code WED10 already exists'", "'A percentage discount must be between 1% and 90%.'", "'The end date must be after the start date.'", "The code box only accepts letters and numbers."], "id": "TC-091"}, {"m": "Coupons", "s": "Switch off, edit, delete", "t": "P", "pre": "WED10 exists, plus one unused test coupon.", "steps": ["Switch WED10 off, try it in the bag, switch it on.", "Edit WED10 to 15%.", "Delete the unused coupon.", "Try to delete a coupon that has been used on an order."], "exp": ["Off: bag says not valid. On: works again.", "Edit applies to new bags.", "Unused coupon deleted.", "Used coupon: no Delete button / message that it is kept for records — switch it off instead."], "id": "TC-092"}, {"m": "Coupons", "s": "Private limited coupon", "t": "P", "pre": "Coupons page.", "steps": ["Create VIP100, ₹100 off, 'Private, first 2 uses only'.", "Use it on 2 orders (different WhatsApp numbers), then try a third."], "exp": ["Not shown on Offers or the banner.", "Used column counts up; status 'Used up' after 2; third use refused ('fully used')."], "id": "TC-093"}]}, {"key": "adminreviews", "title": "Phase 16 · Admin: Reviews", "intro": "Reviews come from customers rating delivered orders and only show after approval.", "cases": [{"m": "Reviews", "s": "Approve, reply, hide, delete", "t": "P", "pre": "A review waiting (from the rating test).", "steps": ["Type a reply 'Thank you!' and Save reply.", "Click Approve.", "Open the product page.", "Hide from store, check the product page, approve again.", "Delete a review (confirm)."], "exp": ["Approved review appears on the product page under 'Reviews from brides' with your reply, and the star rating appears.", "Hidden review disappears from the product page and the rating updates.", "Deleted review is gone everywhere."], "id": "TC-094"}]}, {"key": "adminreports", "title": "Phase 17 · Admin: Dashboard, Customers, Reports, Settings", "intro": "Summary numbers and store configuration.", "cases": [{"m": "Dashboard", "s": "Dashboard figures match orders", "t": "P", "pre": "A few orders: some paid, one cancelled.", "steps": ["Open Dashboard.", "Compare with Bridal Orders."], "exp": ["Revenue collected = sum of paid, not-cancelled order totals (last 30 days).", "Orders placed, Awaiting payment and In production counts match.", "Recent orders list the newest orders; clicking a reference opens that order."], "id": "TC-095"}, {"m": "Customers", "s": "Customer list", "t": "P", "pre": "Orders from 2+ different WhatsApp numbers.", "steps": ["Open Customers.", "Search by name, phone and city.", "Click a 'Last order' date."], "exp": ["One row per WhatsApp number with orders count and paid total.", "Search filters the list.", "The date opens that customer's last order."], "id": "TC-096"}, {"m": "Reports", "s": "Reports and CSV export", "t": "P", "pre": "Paid orders exist.", "steps": ["Open Reports. Switch period: Last 7 days, Last 30 days, This year.", "Click 'Export CSV' and open the file in Excel."], "exp": ["Gross sales, discounts, net revenue, shipping, paid orders update with the period; chart bars and Top products make sense.", "CSV downloads and shows the same totals."], "id": "TC-097"}, {"m": "Settings", "s": "Save contact and shipping settings", "t": "P", "pre": "Admin → Settings.", "steps": ["Set WhatsApp 9123456780, free shipping from 2000, fee 120. Save.", "Open the storefront home, Contact and a product page; put a ₹699 item in the bag."], "exp": ["'Settings saved…' message.", "Every WhatsApp link opens 91 9123456780; banner says ₹2,000; bag charges ₹120 shipping.", "Restore your real values afterwards."], "id": "TC-098"}, {"m": "Settings", "s": "Settings validation", "t": "N", "pre": "Settings page.", "steps": ["WhatsApp '12345'. Save.", "Invalid email 'shop@'. Save."], "exp": ["'Enter a valid 10-digit Indian mobile number'", "Email error. Nothing changes on the storefront."], "id": "TC-099"}]}, {"key": "email", "title": "Phase 18 · Emails and notifications", "intro": "Emails are queued in the database and sent only when the email job runs.", "cases": [{"m": "Email", "s": "Emails are queued", "t": "P", "pre": "Prisma Studio open.", "steps": ["Submit a custom request, then send it a quote from admin.", "Open the EmailOutbox table."], "exp": ["Rows for: customer confirmation, shop notification, and the quote email — with sentAt empty."], "needs": "db", "id": "TC-100"}, {"m": "Email", "s": "Send queued emails", "t": "P", "pre": "SMTP details in .env (e.g. a Mailtrap inbox). CRON_SECRET set.", "steps": ["In a terminal run: curl -H \"x-cron-secret: <your CRON_SECRET>\" http://localhost:3000/api/cron/send-emails", "Check the inbox."], "exp": ["Response shows sent count. Emails arrive with correct names, price and a working /quote/… link.", "Special characters in names show as text (no broken HTML)."], "needs": "setup", "known": "No scheduler is set up yet, so emails are never sent automatically. Customers get no email or WhatsApp when they place a normal order.", "id": "TC-101"}]}, {"key": "journeys", "title": "Phase 19 · End-to-end journeys", "intro": "Full real-life stories. Do each in one sitting and check every stage.", "cases": [{"m": "Journey", "s": "Bride buys a ready-made set and pays online", "t": "X", "pre": "Clean bag. Coupon WED10 live. Test payment keys.", "steps": ["Browse Home → category → product. Choose size, add names.", "Apply WED10 in the bag.", "Checkout and place the order.", "Pay with success@razorpay.", "Admin: start handcrafting, dispatch with tracking, mark delivered.", "Customer: see each status, then rate 5 stars.", "Admin: approve the review."], "exp": ["Price is the same at every step (bag, checkout, Razorpay, admin).", "Stock drops once. Coupon 'Used' increases by 1.", "Customer sees Confirmed → Handcrafting → Dispatched (with tracking) → Delivered.", "Review appears on the product page after approval. Dashboard and Reports include the sale."], "needs": "setup", "id": "TC-102"}, {"m": "Journey", "s": "Bride pays by UPI outside Razorpay", "t": "X", "pre": "Clean bag.", "steps": ["Place an order.", "In chat, customer writes 'I paid by GPay'.", "Admin replies, records UPI payment with the UTR.", "Admin dispatches and delivers."], "exp": ["Chat works both ways live. After 'Mark as paid' the customer sees Confirmed. The rest as above."], "id": "TC-103"}, {"m": "Journey", "s": "Bespoke design from request to delivery", "t": "X", "pre": "None.", "steps": ["Customer submits a custom request.", "Admin sends a quote.", "Customer opens the quote link and accepts with address.", "Customer pays.", "Admin marks the request in production and the order through to delivered."], "exp": ["Each stage shows correctly in Custom Requests and Bridal Orders.", "Order total = quote price."], "id": "TC-104"}, {"m": "Journey", "s": "Customer abandons and returns", "t": "X", "pre": "None.", "steps": ["Add items to the bag, close the browser.", "Reopen the site later.", "Place an order but don't pay; close the tab.", "Next day, use Track Order to find it and pay."], "exp": ["Bag is still there.", "Unpaid order still waits (stock is held).", "Track Order finds it and payment works."], "known": "Unpaid orders hold stock until an admin cancels them — there is no automatic expiry yet.", "id": "TC-105"}, {"m": "Journey", "s": "Order cancelled after payment", "t": "X", "pre": "A paid order.", "steps": ["Admin cancels it.", "Check stock, Dashboard and the order notes."], "exp": ["Stock returned, 'REFUND REQUIRED' note, Dashboard refund alert. Owner refunds in Razorpay manually."], "id": "TC-106"}]}, {"key": "responsive", "title": "Phase 20 · Mobile, tablet and browsers", "intro": "Use Chrome DevTools device toolbar (Ctrl+Shift+M) and, if possible, a real phone on the same Wi-Fi (http://<your-PC-IP>:3000).", "cases": [{"m": "Responsive", "s": "Storefront on a phone (375px)", "t": "P", "pre": "DevTools device: iPhone SE or similar.", "steps": ["Visit Home, Shop, a product, Bag, Checkout, an order page.", "Open the ☰ menu and the bottom navigation bar."], "exp": ["No sideways scrolling. Text readable without zoom. Buttons easy to tap.", "Menu opens/closes; bottom bar (Home, Shop, Custom, Bag, Track) works and doesn't cover buttons."], "known": "Earlier audit found the home page slightly wider than the phone screen (sideways scroll). Check it.", "id": "TC-107"}, {"m": "Responsive", "s": "Admin on tablet and phone", "t": "P", "pre": "DevTools: iPad (768px) and phone (375px).", "steps": ["Open admin. Tap the ☰ button at top left.", "Open Bridal Orders and an order; record a payment.", "Press Esc or tap outside the menu."], "exp": ["Menu button is visible at 1024px and below; the menu slides in and closes after choosing a page or pressing Esc.", "Tables scroll sideways inside their box; forms are usable."], "id": "TC-108"}, {"m": "Browsers", "s": "Other browsers", "t": "P", "pre": "Edge, Firefox, and Safari on an iPhone if available.", "steps": ["Repeat: browse, add to bag, checkout validation, order page, admin login."], "exp": ["Same behaviour everywhere. Note any layout or font differences."], "id": "TC-109"}, {"m": "Accessibility", "s": "Keyboard only", "t": "P", "pre": "Desktop.", "steps": ["Using only Tab, Shift+Tab, Enter and Space: add a product to the bag and reach checkout.", "Fill the checkout form."], "exp": ["A visible outline shows where you are. Every button can be reached and pressed. Form labels are read correctly by a screen reader (optional: Windows Narrator)."], "id": "TC-110"}]}, {"key": "security", "title": "Phase 21 · Security and access checks", "intro": "Simple checks anyone can do with a browser.", "cases": [{"m": "Security", "s": "Admin data needs login", "t": "N", "pre": "Browser B logged OUT of admin.", "steps": ["Open http://localhost:3000/api/admin/products", "Open http://localhost:3000/api/admin/enquiries", "Open http://localhost:3000/admin/settings"], "exp": ["The API addresses show {\"success\":false,\"error\":\"Authentication required\"} (or similar 401).", "Admin pages redirect to login."], "id": "TC-111"}, {"m": "Security", "s": "Order details need verification", "t": "N", "pre": "An order code; Browser B never verified it.", "steps": ["Open http://localhost:3000/api/enquiries/<order code>"], "exp": ["'Verification required' — no name, phone or address is shown."], "id": "TC-112"}, {"m": "Security", "s": "Text is shown as text, not run as code", "t": "E", "pre": "Checkout and custom order forms.", "steps": ["Place an order with name <b>Test<\/b><script>alert(1)<\/script> (it may be refused for length; try just <b>Test<\/b>).", "View it in admin and on the order page."], "exp": ["The name shows literally with the angle brackets. No pop-up appears. Nothing becomes bold."], "id": "TC-113"}, {"m": "Security", "s": "Session expiry", "t": "E", "pre": "Logged in as admin.", "steps": ["In DevTools → Application → Cookies, delete 'aval_session'.", "Click any admin page or action."], "exp": ["You are sent to the login page; actions fail with 'Authentication required', not a blank screen."], "id": "TC-114"}, {"m": "Security", "s": "Secrets are not exposed", "t": "N", "pre": "Browser.", "steps": ["View page source (Ctrl+U) on the home page and checkout.", "Search for 'rzp_', 'SECRET', 'DATABASE_URL'."], "exp": ["No secret keys or database addresses appear. (The Razorpay KEY ID appears only inside the payment pop-up — that is normal; the secret must never appear.)"], "id": "TC-115"}]}, {"key": "edge", "title": "Phase 22 · Errors, edge cases and unusual use", "intro": "Things real users do by accident.", "cases": [{"m": "Edge", "s": "No internet during checkout", "t": "E", "pre": "DevTools → Network → set to 'Offline'.", "steps": ["Click 'Confirm & Place Order'.", "Go back online and try again."], "exp": ["'Network error. Please check your internet connection.' No crash. Works when back online, and only one order is created."], "id": "TC-116"}, {"m": "Edge", "s": "Very long text", "t": "E", "pre": "Checkout and custom order.", "steps": ["Paste 400 characters into Street address.", "Paste 2,000 characters into custom order notes.", "Type a 61-character personalisation name."], "exp": ["Over-long inputs are refused with a readable message (not a technical one), or accepted and displayed without breaking the layout."], "id": "TC-117"}, {"m": "Edge", "s": "Special characters and emoji", "t": "E", "pre": "Forms.", "steps": ["Name 'Ánanya O’Brien 💍', city 'Thiruvananthapuram', notes with Tamil text 'மணமகள்'."], "exp": ["Saved and displayed correctly in the order page and admin."], "id": "TC-118"}, {"m": "Edge", "s": "Same order open in two tabs", "t": "E", "pre": "Admin open in two tabs on the same order.", "steps": ["In tab 1 mark it paid. In tab 2 (not refreshed) click 'Mark as paid' again."], "exp": ["Tab 2 shows 'This order is already marked as paid' — no double payment."], "id": "TC-119"}, {"m": "Edge", "s": "Price changed while customer is in the bag", "t": "E", "pre": "Customer's bag open with a product.", "steps": ["Admin changes that product's selling price.", "Customer refreshes the bag and checks out."], "exp": ["Bag and checkout show the NEW price before the order is placed; the order is saved at the new price."], "id": "TC-120"}, {"m": "Edge", "s": "Too many orders from one connection", "t": "E", "pre": "Browser A.", "steps": ["Place 11 orders within an hour (tiny item, test details)."], "exp": ["The 11th: 'Too many orders from this connection. Please try again later.'"], "known": "Limits reset when the server restarts and are per server — fine locally, needs a shared store in production.", "id": "TC-121"}]}];
+const TYPE = { P: 'Positive', N: 'Negative', E: 'Edge case', X: 'End-to-end' };
+const STATUSES = ['Not Tested', 'Pass', 'Fail', 'Blocked'];
+const ALL = PHASES.flatMap((ph) => ph.cases.map((c) => ({ ...c, phase: ph.key, phaseTitle: ph.title })));
+
+let results = {};   // id -> {status, actual, evidence, remarks, updatedAt}
+let bugs = [];      // {id, num, ...}
+let notes = '';
+let db = null;
+let mode = 'loading'; // 'db' | 'local' | 'loading'
+const pending = {}; // per-doc write chain
+
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const statusOf = (id) => results[id]?.status || 'Not Tested';
+const cls = (s) => s.replace(/\s/g, '');
+
+// ---------- persistence ----------
+const LS = 'aval-handbook-v1';
+function loadLocal() {
+  try { const d = JSON.parse(localStorage.getItem(LS) || '{}'); results = d.results || {}; bugs = d.bugs || []; notes = d.notes || ''; } catch { /* storage unavailable */ }
+}
+function saveLocal() {
+  try { localStorage.setItem(LS, JSON.stringify({ results, bugs, notes })); } catch { /* ignore */ }
+}
+function queueWrite(key, fn) {
+  pending[key] = (pending[key] || Promise.resolve()).then(fn).catch((e) => {
+    setNote(e?.code === 'quota_exceeded' ? 'Storage is full — some results were not saved.' : 'A change could not be saved. Check your connection.', true);
+  });
+  return pending[key];
+}
+function setNote(text, bad) {
+  const n = $('#saveNote'); n.textContent = text; n.style.color = bad ? 'var(--fail)' : '';
+}
+
+async function saveResult(id) {
+  const body = { ...(results[id] || {}), updatedAt: new Date().toISOString() };
+  results[id] = body;
+  if (mode === 'db') await queueWrite('r:' + id, () => db.doc('results/' + id).set(body));
+  else saveLocal();
+  stamp(id); renderTotals();
+}
+async function saveNotes() {
+  if (mode === 'db') await queueWrite('notes', () => db.doc('meta/release').set({ notes, updatedAt: new Date().toISOString() }));
+  else saveLocal();
+}
+
+// ---------- rendering: tests ----------
+function caseHTML(c) {
+  const r = results[c.id] || {};
+  const st = statusOf(c.id);
+  const needs = c.needs === 'db' ? 'Needs DB' : c.needs === 'setup' ? 'Needs setup' : '';
+  return `<details class="tc" id="${c.id}" data-status="${cls(st)}">
+    <summary>
+      <span class="tc-id">${c.id}</span>
+      <span class="tc-title">${esc(c.s)}<small>${esc(c.m)}</small></span>
+      <span class="tc-chips">
+        <span class="chip t-chip">${TYPE[c.t]}</span>
+        ${c.known ? '<span class="chip k-chip">Known issue</span>' : ''}
+        ${needs ? `<span class="chip n-chip">${needs}</span>` : ''}
+        <span class="chip s-${cls(st)}" data-chip>${st}</span>
+      </span>
+    </summary>
+    <div class="tc-body">
+      <div><h4>Before you start</h4><p style="margin:0">${esc(c.pre)}</p></div>
+      <div><h4>Steps</h4><ol>${c.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>
+      <div><h4>Expected result</h4><ul>${c.exp.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>
+      ${c.known ? `<div class="known"><b>Known issue:</b> ${esc(c.known)}</div>` : ''}
+      <div class="track">
+        <div class="wide"><span class="muted" style="font-size:12px;font-weight:600">Status</span>
+          <div class="statusbtns" role="group" aria-label="Status for ${c.id}">
+            ${STATUSES.map((s) => `<button type="button" class="b-${cls(s)}" data-id="${c.id}" data-status="${s}" aria-pressed="${s === st}">${s}</button>`).join('')}
+          </div>
+        </div>
+        <label class="wide">Actual result<textarea rows="2" data-id="${c.id}" data-field="actual" id="a-${c.id}">${esc(r.actual)}</textarea></label>
+        <label>Evidence (file name)<input data-id="${c.id}" data-field="evidence" id="e-${c.id}" value="${esc(r.evidence)}" maxlength="200"></label>
+        <label>Remarks<input data-id="${c.id}" data-field="remarks" id="m-${c.id}" value="${esc(r.remarks)}" maxlength="500"></label>
+        <div class="saved" id="t-${c.id}">${r.updatedAt ? 'Saved ' + new Date(r.updatedAt).toLocaleString() : ''}</div>
+      </div>
+    </div>
+  </details>`;
+}
+
+function renderTests() {
+  const fp = $('#fPhase').value, fs = $('#fStatus').value, ft = $('#fType').value, q = $('#fText').value.trim().toLowerCase();
+  const open = new Set([...document.querySelectorAll('details.tc[open]')].map((d) => d.id));
+  $('#testList').innerHTML = PHASES.filter((ph) => !fp || ph.key === fp).map((ph) => {
+    const cs = ph.cases.filter((c) => (!fs || statusOf(c.id) === fs) && (!ft || c.t === ft) && (!q || (c.id + ' ' + c.m + ' ' + c.s + ' ' + c.steps.join(' ')).toLowerCase().includes(q)));
+    if (!cs.length) return '';
+    const done = ph.cases.filter((c) => statusOf(c.id) !== 'Not Tested').length;
+    return `<div class="phase"><div class="phase-head"><h3>${esc(ph.title)}</h3><span class="muted" style="font-size:13px">${done} of ${ph.cases.length} done</span></div>
+      <p class="phase-intro">${esc(ph.intro)}</p>${cs.map(caseHTML).join('')}</div>`;
+  }).join('') || '<p class="muted">No tests match these filters.</p>';
+  open.forEach((id) => { const d = document.getElementById(id); if (d) d.open = true; });
+}
+
+function stamp(id) {
+  const t = document.getElementById('t-' + id);
+  if (t && results[id]?.updatedAt) t.textContent = (mode === 'db' ? 'Saved ' : 'Saved on this device ') + new Date(results[id].updatedAt).toLocaleString();
+  const d = document.getElementById(id);
+  if (d) {
+    const st = statusOf(id);
+    d.dataset.status = cls(st);
+    const chip = d.querySelector('[data-chip]'); chip.className = 'chip s-' + cls(st); chip.textContent = st;
+    d.querySelectorAll('.statusbtns button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.status === st)));
+  }
+}
+
+// ---------- totals, checklist, report ----------
+function tally(list) {
+  const t = { total: list.length, Pass: 0, Fail: 0, Blocked: 0, 'Not Tested': 0 };
+  list.forEach((c) => t[statusOf(c.id)]++);
+  return t;
+}
+function renderTotals() {
+  const t = tally(ALL);
+  const pct = (n) => (100 * n / t.total).toFixed(2) + '%';
+  $('#bar').innerHTML = `<span style="width:${pct(t.Pass)};background:var(--pass)"></span><span style="width:${pct(t.Fail)};background:var(--fail)"></span><span style="width:${pct(t.Blocked)};background:var(--block)"></span>`;
+  const openBugs = bugs.filter((b) => b.state === 'Open' || !b.state);
+  $('#counts').innerHTML = `<span><b>${t.total - t['Not Tested']}</b> of ${t.total} tested</span><span><b style="color:var(--pass)">${t.Pass}</b> pass</span><span><b style="color:var(--fail)">${t.Fail}</b> fail</span><span><b style="color:var(--block)">${t.Blocked}</b> blocked</span><span><b>${openBugs.length}</b> open bugs</span>`;
+  if (!$('#view-checklist').hidden) renderChecklist();
+  if (!$('#view-report').hidden) renderReport();
+}
+function renderChecklist() {
+  $('#checkTable tbody').innerHTML = ALL.map((c) => {
+    const st = statusOf(c.id);
+    return `<tr><td><a href="#tests" data-goto="${c.id}" class="mono">${c.id}</a></td><td>${esc(c.m)}</td><td>${esc(c.s)}</td><td>${TYPE[c.t]}</td><td><span class="chip s-${cls(st)}">${st}</span></td><td>${esc(results[c.id]?.remarks || '')}</td></tr>`;
+  }).join('');
+}
+function renderReport() {
+  const t = tally(ALL);
+  const sev = (s) => bugs.filter((b) => b.severity === s && (b.state || 'Open') === 'Open').length;
+  $('#kpis').innerHTML = [
+    ['Total tests', t.total], ['Passed', t.Pass], ['Failed', t.Fail], ['Blocked', t.Blocked], ['Not tested', t['Not Tested']],
+    ['Critical bugs', sev('Critical')], ['Major bugs', sev('Major')], ['Moderate bugs', sev('Moderate')], ['Minor bugs', sev('Minor')],
+  ].map(([l, v]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+  $('#phaseTable tbody').innerHTML = PHASES.map((ph) => { const p = tally(ph.cases); return `<tr><td>${esc(ph.title)}</td><td>${p.total}</td><td>${p.Pass}</td><td>${p.Fail}</td><td>${p.Blocked}</td><td>${p['Not Tested']}</td></tr>`; }).join('');
+  const failed = ALL.filter((c) => statusOf(c.id) === 'Fail');
+  $('#failList').innerHTML = failed.length ? `<div class="tbl"><table><tr><th>ID</th><th>Scenario</th><th>Actual result</th></tr>${failed.map((c) => `<tr><td><a href="#tests" data-goto="${c.id}" class="mono">${c.id}</a></td><td>${esc(c.s)}</td><td>${esc(results[c.id]?.actual || '')}</td></tr>`).join('')}</table></div>` : 'None yet.';
+  const open = bugs.filter((b) => (b.state || 'Open') === 'Open');
+  $('#openBugs').innerHTML = open.length ? `<div class="tbl"><table><tr><th>Bug</th><th>Severity</th><th>Priority</th><th>Title</th></tr>${open.map((b) => `<tr><td class="mono">BUG-${String(b.num).padStart(3, '0')}</td><td><span class="chip sev-${esc(b.severity)}">${esc(b.severity)}</span></td><td>${esc(b.priority)}</td><td>${esc(b.title)}</td></tr>`).join('')}</table></div>` : 'None logged.';
+}
+
+// ---------- bugs ----------
+function renderBugs() {
+  const fs = $('#bfSev').value, fst = $('#bfState').value;
+  const list = bugs.slice().sort((a, b) => b.num - a.num).filter((b) => (!fs || b.severity === fs) && (!fst || (b.state || 'Open') === fst));
+  $('#bugList').innerHTML = list.length ? list.map((b) => `<div class="card bug" style="margin-bottom:10px">
+      <div class="bug-head"><span><span class="mono">BUG-${String(b.num).padStart(3, '0')}</span> <b>${esc(b.title)}</b></span>
+        <span><span class="chip sev-${esc(b.severity)}">${esc(b.severity)}</span> <span class="chip t-chip">${esc(b.priority)}</span></span></div>
+      <div class="muted" style="font-size:13px">${esc(b.module)}${b.tc ? ' · ' + esc(b.tc) : ''}${b.env ? ' · ' + esc(b.env) : ''} · logged ${new Date(b.createdAt).toLocaleString()}</div>
+      ${b.steps ? `<div><b style="font-size:12px">Steps</b><pre>${esc(b.steps)}</pre></div>` : ''}
+      ${b.expected ? `<div><b style="font-size:12px">Expected</b><pre>${esc(b.expected)}</pre></div>` : ''}
+      ${b.actual ? `<div><b style="font-size:12px">Actual</b><pre>${esc(b.actual)}</pre></div>` : ''}
+      ${b.evidence ? `<div class="muted" style="font-size:13px">Evidence: ${esc(b.evidence)}</div>` : ''}
+      ${b.fix ? `<div class="muted" style="font-size:13px">Suggested fix: ${esc(b.fix)}</div>` : ''}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label class="muted" style="font-size:12px" for="st-${b.id}">State</label>
+        <select id="st-${b.id}" data-bugstate="${b.id}" style="font:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg)">
+          ${['Open', 'Fixed', 'Retest passed', "Won't fix"].map((s) => `<option${(b.state || 'Open') === s ? ' selected' : ''}>${s}</option>`).join('')}
+        </select>
+        <button type="button" class="ghost" data-bugdel="${b.id}">Delete</button>
+      </div></div>`).join('') : '<p class="muted">No bugs logged yet.</p>';
+}
+
+async function addBug(e) {
+  e.preventDefault();
+  const v = (id) => $('#' + id).value.trim();
+  if (!v('bTitle')) return;
+  const bug = {
+    num: bugs.reduce((m, b) => Math.max(m, b.num || 0), 0) + 1,
+    title: v('bTitle'), module: v('bModule'), tc: v('bTc'), env: v('bEnv'), severity: $('#bSev').value, priority: $('#bPri').value,
+    steps: v('bSteps'), expected: v('bExp'), actual: v('bAct'), evidence: v('bEvid'), fix: v('bFix'), state: 'Open', createdAt: new Date().toISOString(),
+  };
+  try {
+    if (mode === 'db') { await db.collection('bugs').add(bug); }
+    else { bugs.push({ ...bug, id: 'b' + Date.now() }); saveLocal(); renderBugs(); renderTotals(); }
+    $('#bugForm').reset(); $('#bugMsg').textContent = `Logged as BUG-${String(bug.num).padStart(3, '0')}.`;
+  } catch (err) {
+    $('#bugMsg').textContent = err?.code === 'quota_exceeded' ? 'Storage is full; delete old bugs first.' : 'Not saved. Check your connection and try again.';
+  }
+}
+
+async function setBugState(id, state) {
+  const b = bugs.find((x) => x.id === id); if (!b) return;
+  b.state = state;
+  if (mode === 'db') await queueWrite('b:' + id, () => db.doc('bugs/' + id).update({ state }));
+  else { saveLocal(); renderBugs(); renderTotals(); }
+}
+const armedDelete = new Set();
+async function deleteBug(id, btn) {
+  if (!armedDelete.has(id)) { armedDelete.add(id); btn.textContent = 'Click again to delete'; setTimeout(() => { armedDelete.delete(id); if (btn.isConnected) btn.textContent = 'Delete'; }, 4000); return; }
+  armedDelete.delete(id);
+  if (mode === 'db') await queueWrite('b:' + id, () => db.doc('bugs/' + id).delete());
+  else { bugs = bugs.filter((b) => b.id !== id); saveLocal(); renderBugs(); renderTotals(); }
+}
+
+// ---------- routing ----------
+const VIEWS = ['guide', 'tests', 'checklist', 'bugs', 'report'];
+function route() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'guide';
+  document.querySelectorAll('[data-view]').forEach((s) => (s.hidden = s.dataset.view !== v));
+  document.querySelectorAll('nav.tabs a').forEach((a) => a.setAttribute('aria-current', a.getAttribute('href') === '#' + v ? 'page' : 'false'));
+  if (v === 'checklist') renderChecklist();
+  if (v === 'report') renderReport();
+  if (v === 'bugs') renderBugs();
+}
+
+// ---------- events ----------
+document.addEventListener('click', (e) => {
+  const sb = e.target.closest('.statusbtns button');
+  if (sb) { const id = sb.dataset.id; results[id] = { ...(results[id] || {}), status: sb.dataset.status }; saveResult(id); return; }
+  const go = e.target.closest('[data-goto]');
+  if (go) {
+    e.preventDefault(); const id = go.dataset.goto;
+    $('#fPhase').value = ''; $('#fStatus').value = ''; $('#fType').value = ''; $('#fText').value = '';
+    location.hash = 'tests'; route(); renderTests();
+    const d = document.getElementById(id); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); }
+    return;
+  }
+  const del = e.target.closest('[data-bugdel]');
+  if (del) deleteBug(del.dataset.bugdel, del);
+});
+document.addEventListener('change', (e) => {
+  const f = e.target.closest('[data-field]');
+  if (f) { const id = f.dataset.id; if ((results[id]?.[f.dataset.field] || '') === f.value) return; results[id] = { ...(results[id] || {}), [f.dataset.field]: f.value }; saveResult(id); return; }
+  const bs = e.target.closest('[data-bugstate]');
+  if (bs) setBugState(bs.dataset.bugstate, bs.value);
+});
+['fPhase', 'fStatus', 'fType'].forEach((id) => $('#' + id).addEventListener('change', renderTests));
+$('#fText').addEventListener('input', renderTests);
+$('#bfSev').addEventListener('change', renderBugs);
+$('#bfState').addEventListener('change', renderBugs);
+$('#bugForm').addEventListener('submit', addBug);
+$('#releaseNotes').addEventListener('change', (e) => { notes = e.target.value; saveNotes(); });
+window.addEventListener('hashchange', route);
+
+// ---------- boot ----------
+$('#fPhase').innerHTML = '<option value="">All phases</option>' + PHASES.map((p) => `<option value="${p.key}">${esc(p.title)}</option>`).join('');
+loadLocal();
+renderTests(); renderTotals(); route();
+$('#releaseNotes').value = notes;
+
+(async () => {
+  const api = window.claude?.use ? await window.claude.use('db').catch(() => null) : null;
+  if (!api) {
+    mode = 'local';
+    setNote('Saving on this device only');
+    $('#storeBanner').innerHTML = '<div class="banner warn">Results are being saved in this browser only. Open the handbook signed in to claude.ai to keep them safely and see them on other devices.</div>';
+    renderTests(); renderTotals();
+    return;
+  }
+  db = api; mode = 'db';
+  let firstR = true, firstB = true;
+  const timer = setTimeout(() => setNote('Saved results can’t be reached yet. Changes will save when the connection returns.', true), 10000);
+  db.collection('results').onSnapshot((snap) => {
+    const next = {}; snap.docs.forEach((d) => { next[d.id] = d.data(); });
+    results = next;
+    if (!snap.metadata.fromCache) { clearTimeout(timer); setNote('All changes saved'); }
+    if (firstR) { firstR = false; renderTests(); } else { ALL.forEach((c) => {
+      // refresh fields that aren't being edited right now
+      stamp(c.id);
+      ['actual', 'evidence', 'remarks'].forEach((f) => { const el = document.getElementById({ actual: 'a-', evidence: 'e-', remarks: 'm-' }[f] + c.id); if (el && document.activeElement !== el) el.value = results[c.id]?.[f] || ''; });
+    }); }
+    renderTotals();
+  }, () => { clearTimeout(timer); setNote('Saved results are unavailable right now.', true); });
+  db.collection('bugs').onSnapshot((snap) => {
+    bugs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (!$('#view-bugs').hidden) renderBugs();
+    renderTotals();
+    if (firstB) firstB = false;
+  }, () => {});
+  db.doc('meta/release').onSnapshot((d) => {
+    notes = d.exists ? (d.data().notes || '') : '';
+    const el = $('#releaseNotes'); if (document.activeElement !== el) el.value = notes;
+  }, () => {});
+})();
+</script>

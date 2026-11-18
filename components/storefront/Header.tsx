@@ -1,20 +1,29 @@
 'use client'
 
 import Link from 'next/link'
+import { useStoreContact } from '@/context/StoreContact'
 import { useState, useEffect } from 'react'
 import { useCart } from '@/context/CartContext'
 
-const NAV_LINKS = [
-  { href: '/shop', label: 'Shop All' },
-  { href: '/category/bridal-bangles', label: 'Bridal Bangles' },
-  { href: '/category/hair-clips', label: 'Hair Accessories' },
-  { href: '/category/customised', label: 'Customised' },
-  { href: '/custom-order', label: 'Custom Order' },
-  { href: '/offers', label: 'Combo Deals' },
-  { href: '/track-order', label: 'Track Order' },
-]
+export interface NavCategory {
+  slug: string
+  name: string
+}
 
-export default function Header() {
+// Category links come from the database (see the storefront layout), so they
+// always point at collections that exist. Track Order lives in the header actions.
+function navLinks(categories: NavCategory[]) {
+  return [
+    { href: '/shop', label: 'Shop All' },
+    ...categories.slice(0, 3).map((c) => ({ href: `/category/${c.slug}`, label: c.name })),
+    { href: '/custom-order', label: 'Custom Order' },
+    { href: '/offers', label: 'Offers' },
+  ]
+}
+
+export default function Header({ categories = [] }: { categories?: NavCategory[] }) {
+  const NAV_LINKS = navLinks(categories)
+  const store = useStoreContact()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { itemCount } = useCart()
 
@@ -74,16 +83,17 @@ export default function Header() {
           </Link>
 
           <Link
-            href="/account"
+            href="/track-order"
             className="desktop-only"
-            aria-label="My Account"
+            aria-label="Track Order"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none', color: 'inherit', padding: '6px' }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
+              <path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14" />
+              <polyline points="3.29 7 12 12 20.71 7" />
+              <line x1="12" y1="22" x2="12" y2="12" />
             </svg>
-            <span className="desktop-only-text" style={{ fontSize: '13px', fontWeight: 500 }}>Account</span>
+            <span className="desktop-only-text" style={{ fontSize: '13px', fontWeight: 500 }}>Track Order</span>
           </Link>
 
           <Link href="/cart" aria-label="Cart" style={{ display: 'flex', alignItems: 'center', gap: '6px', position: 'relative', textDecoration: 'none', color: 'inherit', padding: '6px' }}>
@@ -259,8 +269,8 @@ export default function Header() {
               Bridal Support
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-              <Link href="/account" onClick={() => setMobileOpen(false)} style={{ color: 'var(--tx)', textDecoration: 'none', fontWeight: 600 }}>
-                👤 My Bridal Account &amp; Quotes
+              <Link href="/track-order" onClick={() => setMobileOpen(false)} style={{ color: 'var(--tx)', textDecoration: 'none', fontWeight: 600 }}>
+                📦 Track Your Order / Private Link
               </Link>
               <Link href="/wishlist" onClick={() => setMobileOpen(false)} style={{ color: 'var(--tx)', textDecoration: 'none' }}>
                 ❤️ Saved Wishlist
@@ -281,7 +291,7 @@ export default function Header() {
         {/* Drawer Footer with direct WhatsApp action */}
         <div style={{ padding: '16px 20px 24px', borderTop: '1px solid var(--bd)', background: '#fff' }}>
           <a
-            href="https://wa.me/919876543210?text=Hi%20AVAL%20Store%2C%20I%20would%20like%20to%20order%20bridal%20accessories"
+            href={store.whatsappLink('Hi AVAL Store, I would like to order bridal accessories')}
             target="_blank"
             rel="noopener noreferrer"
             style={{

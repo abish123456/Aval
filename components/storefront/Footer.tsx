@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 
-export default function Footer() {
+export default function Footer({ categories = [] }: { categories?: { slug: string; name: string }[] }) {
   return (
     <footer className="site-footer">
       <div className="container">
@@ -43,11 +43,10 @@ export default function Footer() {
             <h4>Shop</h4>
             <ul>
               <li><Link href="/shop">All Products</Link></li>
-              <li><Link href="/category/bridal-bangles">Bridal Bangles</Link></li>
-              <li><Link href="/category/hair-clips">Hair Accessories</Link></li>
-              <li><Link href="/category/customised">Customised Names</Link></li>
-              <li><Link href="/category/bridesmaid">Bridesmaid Gifts</Link></li>
-              <li><Link href="/offers">Combo Deals</Link></li>
+              {categories.map((c) => (
+                <li key={c.slug}><Link href={`/category/${c.slug}`}>{c.name}</Link></li>
+              ))}
+              <li><Link href="/offers">Offers</Link></li>
             </ul>
           </div>
 

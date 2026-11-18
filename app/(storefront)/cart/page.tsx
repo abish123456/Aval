@@ -5,7 +5,8 @@ import { useState } from 'react'
 import { useCart } from '@/context/CartContext'
 
 function fmt(n: number) {
-  return '₹' + n.toLocaleString('en-IN')
+  // Whole rupees print plainly; percentage coupons can leave paise, shown as .xx
+  return '₹' + n.toLocaleString('en-IN', Number.isInteger(n) ? undefined : { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export default function CartPage() {
@@ -18,24 +19,32 @@ export default function CartPage() {
     shipping,
     total,
     applyCoupon,
+    removeCoupon,
     couponCode,
-    couponDiscount,
+    quote,
+    quoteError,
+    hydrated,
   } = useCart()
 
-  const [inputCode, setInputCode] = useState(couponCode || '')
-  const [couponMsg, setCouponMsg] = useState<{ text: string; error?: boolean } | null>(
-    couponDiscount > 0 ? { text: `Coupon ${couponCode} applied (- ₹${couponDiscount})` } : null
-  )
+  const [inputCode, setInputCode] = useState('')
+  const [applying, setApplying] = useState(false)
+  const [couponMsg, setCouponMsg] = useState<{ text: string; error?: boolean } | null>(null)
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
+  const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!inputCode.trim()) return
-    const ok = applyCoupon(inputCode)
-    if (ok) {
-      setCouponMsg({ text: `Success! ₹${couponDiscount || 300} discount applied.` })
-    } else {
-      setCouponMsg({ text: 'Invalid coupon code. Try AVALWEDDING or BRIDAL10', error: true })
-    }
+    setApplying(true)
+    const r = await applyCoupon(inputCode)
+    setApplying(false)
+    setCouponMsg({ text: r.message, error: !r.ok })
+    if (r.ok) setInputCode('')
+  }
+
+  // A saved coupon can stop being valid (expired, bag changed)
+  const savedCouponError = couponCode && quote?.couponError ? quote.couponError : null
+
+  if (!hydrated) {
+    return <div className="container" style={{ minHeight: '60vh' }} aria-busy="true" />
   }
 
   if (items.length === 0) {
@@ -215,9 +224,15 @@ export default function CartPage() {
               </span>
             </div>
 
-            {shipping > 0 && (
+            {shipping > 0 && quote && quote.freeShippingRemainingPaise > 0 && (
               <div style={{ fontSize: '11px', color: 'var(--tx2)', background: 'var(--bg2)', padding: '6px 10px', borderRadius: 0 }}>
-                💡 Add {fmt(1500 - subtotal)} more for <strong>FREE Shipping</strong>!
+                Add {fmt(Math.ceil(quote.freeShippingRemainingPaise / 100))} more for <strong>free shipping</strong>.
+              </div>
+            )}
+
+            {quoteError && (
+              <div role="alert" style={{ fontSize: '12px', color: 'var(--er)', background: 'var(--er-bg)', padding: '8px 10px' }}>
+                {quoteError}
               </div>
             )}
 
@@ -234,11 +249,28 @@ export default function CartPage() {
 
           {/* Coupon form */}
           <form onSubmit={handleApplyCoupon} style={{ marginTop: '24px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '6px', display: 'block' }}>
-              Have a Promo Code? (Try: <code>AVALWEDDING</code>)
+            <label htmlFor="coupon-code" style={{ fontSize: '12px', color: 'var(--tx2)', marginBottom: '6px', display: 'block' }}>
+              Have a promo code?
             </label>
+            {couponCode && !savedCouponError && (
+              <div style={{ fontSize: '12px', color: 'var(--ok)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                <span>Coupon <strong>{couponCode}</strong> applied</span>
+                <button type="button" onClick={removeCoupon} style={{ background: 'none', border: 0, color: 'var(--tx2)', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}>
+                  Remove
+                </button>
+              </div>
+            )}
+            {savedCouponError && (
+              <div role="alert" style={{ fontSize: '12px', color: 'var(--pr)', marginBottom: '8px' }}>
+                {couponCode}: {savedCouponError}{' '}
+                <button type="button" onClick={removeCoupon} style={{ background: 'none', border: 0, color: 'var(--tx2)', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}>
+                  Remove
+                </button>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
+                id="coupon-code"
                 type="text"
                 placeholder="Enter coupon"
                 className="input"
@@ -246,12 +278,13 @@ export default function CartPage() {
                 onChange={(e) => setInputCode(e.target.value)}
                 style={{ textTransform: 'uppercase' }}
               />
-              <button type="submit" className="btn btn-secondary" style={{ whiteSpace: 'nowrap', padding: '0 16px' }}>
-                Apply
+              <button type="submit" disabled={applying} className="btn btn-secondary" style={{ whiteSpace: 'nowrap', padding: '0 16px' }}>
+                {applying ? 'Checking…' : 'Apply'}
               </button>
             </div>
             {couponMsg && (
               <div
+                role="status"
                 style={{
                   fontSize: '12px',
                   marginTop: '6px',
@@ -284,7 +317,7 @@ export default function CartPage() {
           </Link>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '16px', fontSize: '12px', color: 'var(--tx2)' }}>
-            <span>🔒 256-bit Secure Razorpay Payment</span>
+            <span>Place your order now. Pay securely by UPI or card once we confirm your design.</span>
           </div>
         </div>
       </div>

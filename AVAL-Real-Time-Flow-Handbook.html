@@ -1,0 +1,1228 @@
+<!doctype html>
+<html lang="ta">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AVAL Store · Complete Lifecycle Testing Handbook (Admin to Website)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <style>
+    :root {
+      --bg: #fcfaf8;
+      --surface: #ffffff;
+      --fg: #2c2226;
+      --muted: #6b5e64;
+      --line: #ecdfe2;
+      --maroon: #7a1026;
+      --maroon-dark: #520917;
+      --maroon-soft: #fbf1f4;
+      --gold: #b8860b;
+      --gold-soft: #fef8eb;
+      --blue: #1d4ed8;
+      --blue-soft: #eff6ff;
+      --green: #059669;
+      --green-soft: #ecfdf5;
+      --pass: #1b7a43;
+      --pass-bg: #eaf6ef;
+      --fail: #c02626;
+      --fail-bg: #fde8e8;
+      --blocked: #b45309;
+      --blocked-bg: #fef3c7;
+      --radius: 12px;
+      --shadow: 0 4px 20px -2px rgba(122, 16, 38, 0.06), 0 2px 6px -1px rgba(0,0,0,0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      line-height: 1.6;
+      padding-bottom: 90px;
+    }
+
+    /* Top Sticky Header */
+    header.hero {
+      background: linear-gradient(135deg, var(--maroon-dark) 0%, var(--maroon) 100%);
+      color: #fff;
+      padding: 26px 20px 18px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+    }
+    .header-wrap {
+      max-width: 1140px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .hero p.tagline {
+      font-size: 13.5px;
+      color: #f7d5de;
+      margin-top: 2px;
+    }
+    .stats-badge {
+      display: flex;
+      gap: 10px;
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .stats-badge span { display: flex; align-items: center; gap: 4px; }
+
+    /* Progress bar */
+    .progress-track {
+      height: 7px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 999px;
+      overflow: hidden;
+      display: flex;
+    }
+    .progress-fill-pass { background: #4ade80; height: 100%; transition: width 0.3s; }
+    .progress-fill-fail { background: #f87171; height: 100%; transition: width 0.3s; }
+    .progress-fill-blocked { background: #fbbf24; height: 100%; transition: width 0.3s; }
+
+    /* Nav Tabs */
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-top: 2px;
+      scrollbar-width: none;
+    }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab {
+      background: rgba(255,255,255,0.1);
+      color: #fce7ec;
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .nav-tab:hover, .nav-tab.active {
+      background: #ffffff;
+      color: var(--maroon);
+      border-color: #ffffff;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1140px;
+      margin: 28px auto 0;
+      padding: 0 16px;
+    }
+
+    /* Overview Banner */
+    .overview-card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 30px;
+      box-shadow: var(--shadow);
+    }
+    .overview-card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      color: var(--maroon-dark);
+      margin-bottom: 8px;
+    }
+    .overview-card p {
+      font-size: 14.5px;
+      color: #44373d;
+      margin-bottom: 16px;
+    }
+    .pipeline-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .pipe-step {
+      background: #faf8f9;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      position: relative;
+    }
+    .pipe-step b {
+      display: block;
+      font-size: 13px;
+      color: var(--maroon);
+      margin-bottom: 4px;
+    }
+    .pipe-step span {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+      display: block;
+    }
+
+    /* Act / Journey Section */
+    .act-section {
+      margin-bottom: 44px;
+      scroll-margin-top: 170px;
+    }
+    .act-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+    }
+    .act-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      background: var(--maroon-soft);
+      color: var(--maroon);
+      flex-shrink: 0;
+    }
+    .act-title h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 21px;
+      color: var(--fg);
+    }
+    .act-title p {
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+
+    /* Step Card */
+    .step-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .step-card[data-status="Pass"] { border-left: 6px solid var(--pass); }
+    .step-card[data-status="Fail"] { border-left: 6px solid var(--fail); }
+    .step-card[data-status="Blocked"] { border-left: 6px solid var(--blocked); }
+
+    .step-head {
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .step-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--gold-soft);
+      color: #8c6305;
+      margin-bottom: 4px;
+    }
+    .step-head h3 {
+      font-size: 16.5px;
+      font-weight: 700;
+      color: var(--fg);
+      margin-bottom: 4px;
+    }
+    .step-head p.story {
+      font-size: 13.5px;
+      color: var(--muted);
+      max-width: 740px;
+    }
+
+    .step-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .btn-status {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 11px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-status:hover { background: #f4eff1; }
+    .btn-status.active-pass { background: var(--pass); color: #fff; border-color: var(--pass); }
+    .btn-status.active-fail { background: var(--fail); color: #fff; border-color: var(--fail); }
+    .btn-status.active-blocked { background: var(--blocked); color: #fff; border-color: var(--blocked); }
+
+    .step-body {
+      padding: 0 20px 20px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Technical Pipeline Badge */
+    .pipeline-badge {
+      background: #f8f5f6;
+      border: 1px solid #ebdce1;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .pipe-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pipe-label {
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--maroon);
+    }
+    .pipe-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      background: #fff;
+      border: 1px solid #e0d0d6;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #3b2831;
+    }
+
+    .step-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 768px) {
+      .step-grid { grid-template-columns: 1fr; }
+      .step-head { flex-direction: column; }
+      .step-actions { width: 100%; justify-content: flex-start; }
+    }
+
+    .box {
+      background: #faf8f9;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .box h4 {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--maroon);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .box ol, .box ul {
+      padding-left: 18px;
+      font-size: 13px;
+      color: #382c32;
+    }
+    .box li { margin-bottom: 5px; }
+
+    .notes-box {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: #fff;
+      border: 1px dashed var(--line);
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    .notes-box label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .notes-box input {
+      flex: 1;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    /* Footer Tools */
+    .footer-tools {
+      margin-top: 40px;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .btn-tool {
+      background: var(--maroon);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      font-weight: 600;
+      font-size: 13px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn-tool.secondary {
+      background: #fff;
+      color: var(--fg);
+      border: 1px solid var(--line);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky Bar -->
+  <header class="hero">
+    <div class="header-wrap">
+      <div class="hero-top">
+        <div>
+          <h1>AVAL Store · Full Lifecycle Testing Handbook</h1>
+          <p class="tagline">Admin-la Category &amp; Product create panradhula irundhu ➔ Website-ku vandhu ➔ Bride vaangi ➔ Dispatch aagura complete cycle!</p>
+        </div>
+        <div class="stats-badge">
+          <span>✅ Pass: <b id="statPass">0</b></span>
+          <span>❌ Fail: <b id="statFail">0</b></span>
+          <span>⏸️ Block: <b id="statBlocked">0</b></span>
+          <span>⏳ Pending: <b id="statPending">0</b></span>
+        </div>
+      </div>
+      <div class="progress-track" title="Overall Progress">
+        <div class="progress-fill-pass" id="progPass" style="width: 0%"></div>
+        <div class="progress-fill-fail" id="progFail" style="width: 0%"></div>
+        <div class="progress-fill-blocked" id="progBlocked" style="width: 0%"></div>
+      </div>
+      <nav class="nav-tabs">
+        <a class="nav-tab active" href="#act-1">Act 1: Admin Creates Category &amp; Product</a>
+        <a class="nav-tab" href="#act-2">Act 2: How It Appears on the Website</a>
+        <a class="nav-tab" href="#act-3">Act 3: Bride Buys That New Product</a>
+        <a class="nav-tab" href="#act-4">Act 4: Live Chat &amp; Razorpay Payment</a>
+        <a class="nav-tab" href="#act-5">Act 5: Order Dispatch &amp; Stock Depletion</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Overview Banner -->
+    <div class="overview-card">
+      <h2>The Real-World Lifecycle Story</h2>
+      <p>Oru puthiya e-commerce store eppadi start aagi delivery varaikkum pogudho, adhe order-la testing setup pannirukkom. First Admin ulla poi oru <b>Category create panni, pudhu Product add panni</b>, adhu epdi <b>website home page &amp; shop-ku auto-sync aagi varudhu</b>, appram customer adha epdi vaanguraanga nu paakalam!</p>
+      
+      <div class="pipeline-summary">
+        <div class="pipe-step">
+          <b>👑 1. Admin Genesis</b>
+          <span>Admin creates Category ('Hair Ornaments') + Product ('Ruby Vine', ₹1,999, Stock: 15).</span>
+        </div>
+        <div class="pipe-step">
+          <b>🌐 2. Storefront Sync</b>
+          <span>Website header &amp; shop page automatically updates with the new category &amp; product!</span>
+        </div>
+        <div class="pipe-step">
+          <b>👰 3. Bride Orders It</b>
+          <span>Bride selects size, adds personalisation, applies coupon, and places order.</span>
+        </div>
+        <div class="pipe-step">
+          <b>💬 4. Chat &amp; Pay</b>
+          <span>Bride &amp; Artisan chat on /o/[token]. Bride pays via Razorpay UPI.</span>
+        </div>
+        <div class="pipe-step">
+          <b>📦 5. Dispatch &amp; Stock</b>
+          <span>Admin ships with DTDC tracking. Product stock drops from 15 to 14 in DB!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- ACT 1: ADMIN CREATES CATEGORY & PRODUCT -->
+    <!-- ========================================================================= -->
+    <section class="act-section" id="act-1">
+      <div class="act-header">
+        <div class="act-icon">👑</div>
+        <div class="act-title">
+          <h2>Act 1: Admin Genesis (Creating Category &amp; Product)</h2>
+          <p>Admin dashboard-la oru puthiya category &amp; product create panni database-la save panra flow.</p>
+        </div>
+      </div>
+
+      <!-- Step 1.1 -->
+      <div class="step-card" id="step-1-1">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 1.1</span>
+            <h3>Admin Sign-in to Control Room</h3>
+            <p class="story">Store owner <code>http://localhost:3000/admin</code> open panni thannoda owner account moolama login panranga.</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-1-1', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-1-1', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-1-1', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">Auth API:</span> <span class="pipe-code">POST /api/auth/login</span></div>
+            <div class="pipe-item"><span class="pipe-label">Session:</span> <span class="pipe-code">aval_session (HTTP-only secure cookie)</span></div>
+            <div class="pipe-item"><span class="pipe-label">Role:</span> <span class="pipe-code">AdminUser.role = 'OWNER'</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Chrome-la <code>http://localhost:3000/admin</code> open pannunga.</li>
+                <li>Login page redirect aagum. Admin email &amp; password kuduthu Sign-in pannunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Admin sidebar (Dashboard, Products, Enquiries, Settings) load aaganum.</li>
+                <li>Invalid password kudutha clean-ah 401 Unauthorized generic error varanum.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Admin login notes..." onchange="saveNote('step-1-1', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 1.2 -->
+      <div class="step-card" id="step-1-2">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 1.2</span>
+            <h3>Admin Creates a Brand New Category</h3>
+            <p class="story">Admin pudhusa <b>"Bridal Hair Accessories"</b> nu oru category create panranga. Name type pannale slug <code>bridal-hair-accessories</code> nu <b>automatic-ah generate aagidum</b> (manual slug input thevai illa!).</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-1-2', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-1-2', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-1-2', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">API Route:</span> <span class="pipe-code">POST /api/admin/categories</span></div>
+            <div class="pipe-item"><span class="pipe-label">DB Insert:</span> <span class="pipe-code">prisma.category.create({ data: { name, slug, image } })</span></div>
+            <div class="pipe-item"><span class="pipe-label">Slug Logic:</span> <span class="pipe-code">Auto-slugified from Name: /category/bridal-hair-accessories</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Admin sidebar-la <b>"Categories"</b> click panni <b>"+ Add category"</b> click pannunga.</li>
+                <li><b>Name:</b> <code>Bridal Hair Accessories</code> nu type pannunga. (Keela <i>"Address: /category/bridal-hair-accessories"</i> nu auto-preview theriyum!)</li>
+                <li><b>Description:</b> <code>Handcrafted bridal hair clips and ornaments</code></li>
+                <li>Click <b>"Create category"</b> (Slug manual-ah type panna thevai illa).</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Category list-la <b>"Bridal Hair Accessories"</b> (Hidden - empty) nu appear aaganum.</li>
+                <li>Database <code>Category</code> table-la new record add aaganum with auto-generated slug!</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Category creation notes..." onchange="saveNote('step-1-2', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 1.3 -->
+      <div class="step-card" id="step-1-3">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 1.3</span>
+            <h3>Admin Adds a New Product under That Category</h3>
+            <p class="story">Admin ippo andha category-kku ulla <b>"Ruby Floral Hair Vine"</b> nu pudhu product add panranga (Price: ₹1,999, Stock: 15).</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-1-3', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-1-3', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-1-3', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">API Route:</span> <span class="pipe-code">POST /api/admin/products</span></div>
+            <div class="pipe-item"><span class="pipe-label">DB Insert:</span> <span class="pipe-code">Product (name, slug, salePricePaise: 199900, stock: 15, customisable: true)</span></div>
+            <div class="pipe-item"><span class="pipe-label">Admin UI:</span> <span class="pipe-code">app/admin/products/page.tsx</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Admin sidebar-la <b>"Products"</b> ➔ <b>"+ Add Product"</b> click pannunga.</li>
+                <li><b>Name:</b> <code>Ruby Floral Hair Vine</code>, <b>Category:</b> select <code>Bridal Hair Accessories</code>.</li>
+                <li><b>Regular Price:</b> <code>₹2499</code>, <b>Selling Price:</b> <code>₹1999</code>.</li>
+                <li><b>Stock:</b> <code>15</code>, <b>Sizes:</b> <code>Free Size</code> (or leave empty).</li>
+                <li>Keela <b>Options</b> section-la <b>"Offer name personalisation (+₹200)"</b> checkbox-ah tick ✅ pannunga! *(Idhudhan DB-la customisable)*</li>
+                <li>Click <b>"Add product"</b>.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Product list-la pudhu product stock 15 oda save aaganum.</li>
+                <li>Tags-la <b>"Personalisable"</b> nu badge theriyanum.</li>
+                <li>Database-la paise value (<code>199900</code>) correct-ah calculate aagi insert aaganum.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Product addition notes..." onchange="saveNote('step-1-3', this.value)">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- ACT 2: HOW IT APPEARS ON THE WEBSITE -->
+    <!-- ========================================================================= -->
+    <section class="act-section" id="act-2">
+      <div class="act-header">
+        <div class="act-icon">🌐</div>
+        <div class="act-title">
+          <h2>Act 2: How It Automatically Appears on the Website (Storefront Sync)</h2>
+          <p>Admin create panna category and product live website-la eppadi automatic-ah reflect aagudhu nu check panrom.</p>
+        </div>
+      </div>
+
+      <!-- Step 2.1 -->
+      <div class="step-card" id="step-2-1">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 2.1</span>
+            <h3>Website Header &amp; Home Page Auto-Sync</h3>
+            <p class="story">Normal user window-la <code>http://localhost:3000</code> open panrom. Admin add panna category header-la varudha nu check panrom.</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-2-1', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-2-1', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-2-1', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">Data Fetch:</span> <span class="pipe-code">src/server/catalog.ts ➔ listCategories()</span></div>
+            <div class="pipe-item"><span class="pipe-label">SSR Component:</span> <span class="pipe-code">app/(storefront)/page.tsx</span></div>
+            <div class="pipe-item"><span class="pipe-label">Sync Mechanism:</span> <span class="pipe-code">Direct PostgreSQL Query (no hardcoded lists!)</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Innoru tab-la <code>http://localhost:3000</code> (Customer Home page) open pannunga.</li>
+                <li>Top navigation menu &amp; "Shop by Category" section paathutu refresh pannunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Header-la <b>"Bridal Hair Accessories"</b> link auto-appear aaganum.</li>
+                <li>"Shop by Category" tiles-la pudhu category tile 1 design oda kaattanum.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Header & category sync notes..." onchange="saveNote('step-2-1', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2.2 -->
+      <div class="step-card" id="step-2-2">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 2.2</span>
+            <h3>Product Live in Shop &amp; Category Page</h3>
+            <p class="story">Customer <code>/shop</code> or <code>/category/bridal-hair</code> click panranga. Admin add panna "Ruby Floral Hair Vine" anga kaatanum.</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-2-2', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-2-2', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-2-2', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">Query:</span> <span class="pipe-code">prisma.product.findMany({ where: { category: { slug } } })</span></div>
+            <div class="pipe-item"><span class="pipe-label">Price Conversion:</span> <span class="pipe-code">salePricePaise (199900) / 100 = ₹1,999</span></div>
+            <div class="pipe-item"><span class="pipe-label">Page File:</span> <span class="pipe-code">app/(storefront)/shop/page.tsx</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Menu-la <b>"Shop Bridal Collection"</b> or <b>"Bridal Hair Accessories"</b> click pannunga.</li>
+                <li>Products list-ah paarunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li><b>"Ruby Floral Hair Vine"</b> product card theriyanum.</li>
+                <li>Price: <b>₹1,999</b> (Strike-through ₹2,499) with "Save ₹500" badge.</li>
+                <li>Fake mock products flash aagama real product mattum load aaganum.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Shop listing verification..." onchange="saveNote('step-2-2', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2.3 -->
+      <div class="step-card" id="step-2-3">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 2.3</span>
+            <h3>Dynamic Product Detail Page (`/product/[slug]`)</h3>
+            <p class="story">Customer andha product-ah click panranga. Dedicated detail page dynamic-ah DB-la irundhu load aaganum.</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-2-3', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-2-3', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-2-3', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">Route Param:</span> <span class="pipe-code">/product/ruby-floral-hair-vine</span></div>
+            <div class="pipe-item"><span class="pipe-label">DB Lookup:</span> <span class="pipe-code">prisma.product.findUnique({ where: { slug } })</span></div>
+            <div class="pipe-item"><span class="pipe-label">Page File:</span> <span class="pipe-code">app/(storefront)/product/[slug]/page.tsx</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Product card-ah click panni product detail page-ku ponga.</li>
+                <li>Photos, Stock (15 left), Price (₹1,999), and Customisation input box check pannunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Admin enter panna exact details (Stock: 15, Free Size, ₹1,999) display aaganum.</li>
+                <li>Unknown dummy slug kudutha soft-200 dummy data varama proper 404 Not Found varanum.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Product detail page verification..." onchange="saveNote('step-2-3', this.value)">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- ACT 3: BRIDE PURCHASES THE NEW PRODUCT -->
+    <!-- ========================================================================= -->
+    <section class="act-section" id="act-3">
+      <div class="act-header">
+        <div class="act-icon">👰</div>
+        <div class="act-title">
+          <h2>Act 3: Bride Buys That New Product (Checkout &amp; DB Insert)</h2>
+          <p>Customer andha pudhu product-ah bag-la pottu, address kuduthu order place panra flow.</p>
+        </div>
+      </div>
+
+      <!-- Step 3.1 -->
+      <div class="step-card" id="step-3-1">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 3.1</span>
+            <h3>Customisation &amp; Adding to Shopping Bag</h3>
+            <p class="story">Bride thannoda wedding date personalisation (<code>Divya · 12 Dec</code>) kuduthu "Add to Bag" click panranga.</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-3-1', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-3-1', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-3-1', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">Client Memory:</span> <span class="pipe-code">localStorage.setItem('aval_cart', JSON)</span></div>
+            <div class="pipe-item"><span class="pipe-label">Cart Item:</span> <span class="pipe-code">{ id, name: 'Ruby Floral Hair Vine', price: 1999, qty: 1 }</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Personalisation box-la <code>Divya · 12 Dec</code> type pannunga.</li>
+                <li><b>"Add to Bag"</b> click pannunga.</li>
+                <li>Bag drawer open aagudha nu paarunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Cart count 1 aaganum. Ruby Floral Hair Vine (₹1,999) cart-la theriyanum.</li>
+                <li>Free Express Shipping apply aaganum (Total ₹1,999 &gt; ₹1,500 threshold).</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Cart addition notes..." onchange="saveNote('step-3-1', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3.2 -->
+      <div class="step-card" id="step-3-2">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 3.2</span>
+            <h3>Checkout: Creating Order in PostgreSQL</h3>
+            <p class="story">Bride address &amp; WhatsApp number kuduthu "Place Order" click panranga. PostgreSQL-la new <code>Enquiry</code> row create aagudhu!</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-3-2', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-3-2', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-3-2', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">API Route:</span> <span class="pipe-code">POST /api/enquiries</span></div>
+            <div class="pipe-item"><span class="pipe-label">DB Insert:</span> <span class="pipe-code">Enquiry (token, customerPhone, items JSON, status: 'RECEIVED')</span></div>
+            <div class="pipe-item"><span class="pipe-label">Redirect:</span> <span class="pipe-code">/o/[token] (Private Order URL)</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Proceed to Checkout click pannunga.</li>
+                <li>Customer Name: <code>Divya Rajan</code>, WhatsApp: <code>9876500002</code></li>
+                <li>Address: <code>15 Temple Street</code>, City: <code>Chennai</code>, Pincode: <code>600001</code>.</li>
+                <li>Click <b>"Confirm &amp; Place Order"</b>.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Checkout form crash aagama submit aagi, private link-ku redirect aaganum (eg: <code>/o/abc...</code>).</li>
+                <li>Database <code>Enquiry</code> table-la new row insert aaganum.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Order creation notes..." onchange="saveNote('step-3-2', this.value)">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- ACT 4: TWO-WAY LIVE COMMUNICATION & PAYMENT -->
+    <!-- ========================================================================= -->
+    <section class="act-section" id="act-4">
+      <div class="act-header">
+        <div class="act-icon">💬</div>
+        <div class="act-title">
+          <h2>Act 4: Live Communication &amp; Razorpay Payment</h2>
+          <p>Customer order link-la artisan kitta chat panranga, admin reply panranga, Razorpay payment verify aagudhu.</p>
+        </div>
+      </div>
+
+      <!-- Step 4.1 -->
+      <div class="step-card" id="step-4-1">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 4.1</span>
+            <h3>Customer Chat on Secret Order Link (`/o/[token]`)</h3>
+            <p class="story">Bride thannoda secret order link-la phone verify panni, artisan kitta chat-la message anupuraanga.</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-4-1', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-4-1', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-4-1', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">Chat API:</span> <span class="pipe-code">POST /api/enquiries/[token]/messages</span></div>
+            <div class="pipe-item"><span class="pipe-label">DB Insert:</span> <span class="pipe-code">EnquiryMessage (sender: 'CUSTOMER', message: '...')</span></div>
+            <div class="pipe-item"><span class="pipe-label">Verification:</span> <span class="pipe-code">Last 4 digits: '0002'</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Order page-la phone last 4 digits (<code>0002</code>) pottu unlock pannunga.</li>
+                <li>Chat box-la type pannunga: <code>"Can you send a photo of the hair vine before packing?"</code>.</li>
+                <li>Send click pannunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Message chat box-la display aaganum.</li>
+                <li>Database <code>EnquiryMessage</code> table-la save aagi refresh pannalum azhiya koodadhu.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Customer chat notes..." onchange="saveNote('step-4-1', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4.2 -->
+      <div class="step-card" id="step-4-2">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 4.2</span>
+            <h3>Admin Sees Order &amp; Replies to Customer</h3>
+            <p class="story">Admin <code>/admin/enquiries</code> open panranga. Divya pota "Ruby Floral Hair Vine" order &amp; chat message anga varudhu!</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-4-2', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-4-2', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-4-2', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">Admin API:</span> <span class="pipe-code">GET /api/admin/enquiries</span></div>
+            <div class="pipe-item"><span class="pipe-label">Reply API:</span> <span class="pipe-code">POST /api/admin/enquiries/[token]/messages</span></div>
+            <div class="pipe-item"><span class="pipe-label">DB Insert:</span> <span class="pipe-code">EnquiryMessage (sender: 'ADMIN')</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Admin window-ku poi <b>"Enquiries"</b> page open pannunga.</li>
+                <li>Divya Rajan pota order click pannunga. Customer message theriyudha nu paarunga.</li>
+                <li>Admin reply: <code>"Sure Divya, will share photos tomorrow morning!"</code> nu type panni Send pannunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Customer order page (<code>/o/...</code>) refresh panna admin reply instantly kaattanum.</li>
+                <li>Both sides real-time sync aaganum.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Admin reply sync notes..." onchange="saveNote('step-4-2', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4.3 -->
+      <div class="step-card" id="step-4-3">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 4.3</span>
+            <h3>Razorpay Payment &amp; Automatic Webhook Sync</h3>
+            <p class="story">Customer "Pay Now" click panni payment mudikkiranga. Razorpay webhook server-ku vandhu DB status-ah 'PAID' nu maathudhu.</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-4-3', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-4-3', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-4-3', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">Payment Gateway:</span> <span class="pipe-code">POST /api/enquiries/[token]/pay</span></div>
+            <div class="pipe-item"><span class="pipe-label">Webhook:</span> <span class="pipe-code">POST /api/webhooks/razorpay-enquiry</span></div>
+            <div class="pipe-item"><span class="pipe-label">DB Update:</span> <span class="pipe-code">Enquiry.paymentStatus = 'PAID'</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Customer order page-la <b>"Pay ₹1,999 Now"</b> click pannunga.</li>
+                <li>Test UPI <code>success@razorpay</code> use pannunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Screen-la green <b>"Payment Verified / Paid"</b> badge maaranum.</li>
+                <li>Admin dashboard-layum andha order status "PAID" nu instant-ah maaranum.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Payment & webhook notes..." onchange="saveNote('step-4-3', this.value)">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- ACT 5: ORDER DISPATCH & INVENTORY DEPLETION -->
+    <!-- ========================================================================= -->
+    <section class="act-section" id="act-5">
+      <div class="act-header">
+        <div class="act-icon">📦</div>
+        <div class="act-title">
+          <h2>Act 5: Order Dispatch &amp; Automatic Stock Depletion</h2>
+          <p>Admin parcel dispatch panni tracking number podraanga. Database-la product stock 15-la irundhu 14-kku kuraiganum!</p>
+        </div>
+      </div>
+
+      <!-- Step 5.1 -->
+      <div class="step-card" id="step-5-1">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 5.1</span>
+            <h3>Admin Dispatches &amp; Adds Courier Tracking Number</h3>
+            <p class="story">Admin courier pack panni status-ah "Dispatched" nu maathi tracking number (<code>DTDC987654</code>) podraanga.</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-5-1', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-5-1', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-5-1', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">Tracking API:</span> <span class="pipe-code">POST /api/admin/enquiries/[token]/tracking</span></div>
+            <div class="pipe-item"><span class="pipe-label">DB Update:</span> <span class="pipe-code">Enquiry.status = 'SHIPPED', Enquiry.trackingNumber</span></div>
+            <div class="pipe-item"><span class="pipe-label">Customer View:</span> <span class="pipe-code">app/o/[token]/page.tsx &amp; /track-order</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Admin order details page-la status <b>"Dispatched"</b> nu choose pannunga.</li>
+                <li>Tracking Number: <code>DTDC987654</code> nu type panni Save pannunga.</li>
+                <li>Customer order link (<code>/o/[token]</code>) refresh pannunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Customer screen-la courier name and tracking code live-ah update aaganum.</li>
+                <li>Customer <code>/track-order</code>-la phone pottu check pannalum Dispatched status theriyanum.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Tracking & dispatch verification..." onchange="saveNote('step-5-1', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5.2 -->
+      <div class="step-card" id="step-5-2">
+        <div class="step-head">
+          <div>
+            <span class="step-badge">Step 5.2</span>
+            <h3>Inventory Stock Auto-Depletion Check (15 ➔ 14)</h3>
+            <p class="story">Order complete aachu! Admin products list-la Ruby Floral Hair Vine-oda stock 15-la irundhu 14-kku koranjirukaa nu check panrom.</p>
+          </div>
+          <div class="step-actions">
+            <button class="btn-status" onclick="setStatus('step-5-2', 'Pass')">✅ Pass</button>
+            <button class="btn-status" onclick="setStatus('step-5-2', 'Fail')">❌ Fail</button>
+            <button class="btn-status" onclick="setStatus('step-5-2', 'Blocked')">⏸️ Block</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <div class="pipeline-badge">
+            <div class="pipe-item"><span class="pipe-label">DB Column:</span> <span class="pipe-code">Product.stock (Int)</span></div>
+            <div class="pipe-item"><span class="pipe-label">Expected:</span> <span class="pipe-code">Stock must decrement by 1 (15 ➔ 14)</span></div>
+            <div class="pipe-item"><span class="pipe-label">Audit Finding:</span> <span class="pipe-code">Check if Enquiry flow decrements stock or leaves it untouched</span></div>
+          </div>
+          <div class="step-grid">
+            <div class="box">
+              <h4>👉 Enna Pannanum (Actions)</h4>
+              <ol>
+                <li>Admin sidebar-la <b>"Products"</b> click pannunga.</li>
+                <li><b>"Ruby Floral Hair Vine"</b> product-oda stock number-ah paarunga.</li>
+                <li>Customer website-la andha product page-ah refresh panni paarunga.</li>
+              </ol>
+            </div>
+            <div class="box">
+              <h4>👀 Enna Theriyanum (Expected)</h4>
+              <ul>
+                <li>Stock 15-la irundhu <b>14</b> nu decrease aagi irukkanum.</li>
+                <li>(Audit note: Enquiry flow-la stock auto-decrement aagalana, adha ❌ Fail nu mark panni note eludhunga!)</li>
+              </ul>
+            </div>
+          </div>
+          <div class="notes-box">
+            <label>Notes / Issue:</label>
+            <input type="text" placeholder="Stock depletion result..." onchange="saveNote('step-5-2', this.value)">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer Tools -->
+    <div class="footer-tools">
+      <div>
+        <h4 style="font-size:15px; margin-bottom:4px;">Lifecycle QA Progress Preserved</h4>
+        <p style="font-size:13px; color:var(--muted)">All test results &amp; notes are stored automatically in browser LocalStorage.</p>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-tool secondary" onclick="resetAll()">🔄 Reset All</button>
+        <button class="btn-tool" onclick="exportReport()">📥 Download QA Report (JSON)</button>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'aval_lifecycle_handbook_v3';
+    let data = {};
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) data = JSON.parse(raw);
+      } catch (e) { data = {}; }
+      updateUI();
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch (e) {}
+      updateUI();
+    }
+
+    function setStatus(stepId, status) {
+      if (!data[stepId]) data[stepId] = {};
+      data[stepId].status = (data[stepId].status === status) ? 'NotTested' : status;
+      saveState();
+    }
+
+    function saveNote(stepId, note) {
+      if (!data[stepId]) data[stepId] = {};
+      data[stepId].note = note;
+      saveState();
+    }
+
+    function updateUI() {
+      const cards = document.querySelectorAll('.step-card');
+      let pass = 0, fail = 0, blocked = 0;
+      const total = cards.length;
+
+      cards.forEach(card => {
+        const id = card.id;
+        const state = data[id] || { status: 'NotTested', note: '' };
+        card.setAttribute('data-status', state.status);
+
+        // Buttons
+        const btns = card.querySelectorAll('.btn-status');
+        btns.forEach(btn => {
+          btn.classList.remove('active-pass', 'active-fail', 'active-blocked');
+          if (state.status === 'Pass' && btn.innerText.includes('Pass')) btn.classList.add('active-pass');
+          if (state.status === 'Fail' && btn.innerText.includes('Fail')) btn.classList.add('active-fail');
+          if (state.status === 'Blocked' && btn.innerText.includes('Block')) btn.classList.add('active-blocked');
+        });
+
+        // Notes
+        const noteInput = card.querySelector('.notes-box input');
+        if (noteInput && state.note !== undefined && document.activeElement !== noteInput) {
+          noteInput.value = state.note;
+        }
+
+        if (state.status === 'Pass') pass++;
+        else if (state.status === 'Fail') fail++;
+        else if (state.status === 'Blocked') blocked++;
+      });
+
+      const pending = total - (pass + fail + blocked);
+
+      document.getElementById('statPass').innerText = pass;
+      document.getElementById('statFail').innerText = fail;
+      document.getElementById('statBlocked').innerText = blocked;
+      document.getElementById('statPending').innerText = pending;
+
+      const pPass = (pass / total) * 100;
+      const pFail = (fail / total) * 100;
+      const pBlock = (blocked / total) * 100;
+
+      document.getElementById('progPass').style.width = pPass + '%';
+      document.getElementById('progFail').style.width = pFail + '%';
+      document.getElementById('progBlocked').style.width = pBlock + '%';
+    }
+
+    function resetAll() {
+      if (confirm('Ella testing marks and notes-um reset pannava?')) {
+        data = {};
+        localStorage.removeItem(STORAGE_KEY);
+        updateUI();
+      }
+    }
+
+    function exportReport() {
+      const blob = new Blob([JSON.stringify({ timestamp: new Date().toISOString(), results: data }, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'aval-lifecycle-qa-report.json';
+      a.click();
+    }
+
+    window.addEventListener('DOMContentLoaded', loadState);
+  </script>
+</body>
+</html>

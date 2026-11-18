@@ -12,7 +12,7 @@ function OrderConfirmationContent() {
   const searchParams = useSearchParams()
   const orderNumber = searchParams?.get('orderNumber') || 'AVL-9842'
 
-  const [order, setOrder] = useState<{
+  const [order] = useState<{
     orderNumber: string
     createdAt: string
     customer: {

@@ -1,335 +1,226 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import Link from 'next/link'
+import { PageHeader, Notice, useAdminData, useFlash, FlashMessage, adminRequest } from '../_components/ui'
 
-interface CategoryItem {
+interface Category {
   id: string
   name: string
   slug: string
-  parent: string | null
-  productCount: number
-  isVisible: boolean
   description: string
   image: string
+  productCount: number
+  archived: boolean
+  sortOrder: number
 }
 
-const INITIAL_CATEGORIES: CategoryItem[] = [
-  {
-    id: 'cat-1',
-    name: 'Bridal Bangles',
-    slug: 'bridal-bangles',
-    parent: null,
-    productCount: 42,
-    isVisible: true,
-    description: 'Custom silk thread, Kundan, and pearl sets tailored to your wedding lehenga & saree.',
-    image: '/images/hero_bangles.jpg',
-  },
-  {
-    id: 'cat-2',
-    name: 'Customised Bangles',
-    slug: 'customised',
-    parent: 'Bridal Bangles',
-    productCount: 18,
-    isVisible: true,
-    description: 'Embossed bride & groom names, wedding dates, and bridal hashtags in gold foil.',
-    image: '/images/name_bangles.jpg',
-  },
-  {
-    id: 'cat-3',
-    name: 'Hair Clips & Pins',
-    slug: 'hair-clips',
-    parent: null,
-    productCount: 31,
-    isVisible: true,
-    description: 'Jadabi floral hair extensions, poola jada clips, and bridal barrettes.',
-    image: '/images/pearl_hair_clip.jpg',
-  },
-  {
-    id: 'cat-4',
-    name: 'Bridesmaid Favours',
-    slug: 'bridesmaid',
-    parent: null,
-    productCount: 22,
-    isVisible: true,
-    description: 'Coordinated bangle sets, potli bags, and gift boxes for your bride tribe.',
-    image: '/images/kundan_set.jpg',
-  },
-  {
-    id: 'cat-5',
-    name: 'Gift Sets & Trousseau Trunks',
-    slug: 'gift-sets',
-    parent: null,
-    productCount: 14,
-    isVisible: true,
-    description: 'Curated bridal trousseau sets complete with presentation velvet trunks.',
-    image: '/images/trousseau_box.jpg',
-  },
-]
+interface FormState {
+  id?: string
+  name: string
+  description: string
+  image: string
+  sortOrder: string
+  visible: boolean
+}
+
+const EMPTY: FormState = { name: '', description: '', image: '/images/hero_bangles.jpg', sortOrder: '0', visible: true }
+
+const labelStyle: React.CSSProperties = { fontSize: '12px', fontWeight: 600, color: 'var(--dk)', display: 'block', marginBottom: '6px' }
+
+function slugify(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+}
 
 export default function AdminCategoriesPage() {
-  const [categories, setCategories] = useState<CategoryItem[]>(INITIAL_CATEGORIES)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [name, setName] = useState('')
-  const [parent, setParent] = useState('')
-  const [description, setDescription] = useState('')
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const { data, error, loading, reload } = useAdminData<Category[]>('/api/admin/categories')
+  const [form, setForm] = useState<FormState | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<Category | null>(null)
+  const [flash, showFlash, clearFlash] = useFlash()
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg)
-    setTimeout(() => setToastMessage(null), 3000)
-  }
-
-  const handleAddCategory = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
-
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-    const newCat: CategoryItem = {
-      id: 'cat-' + Date.now(),
-      name: name.trim(),
-      slug,
-      parent: parent || null,
-      productCount: 0,
-      isVisible: true,
-      description,
-      image: '/images/hero_bangles.jpg',
+  async function upload(file: File) {
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/admin/upload', { method: 'POST', body: fd })
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && json?.data?.url) setForm((f) => (f ? { ...f, image: json.data.url } : f))
+      else showFlash('error', json?.error ?? 'Upload failed.')
+    } catch {
+      showFlash('error', 'Upload failed. Check your connection.')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
     }
-
-    setCategories([...categories, newCat])
-    setName('')
-    setParent('')
-    setDescription('')
-    setShowAddForm(false)
-    showToast(`Category "${newCat.name}" added successfully!`)
   }
 
-  const moveCategory = (index: number, direction: -1 | 1) => {
-    const targetIndex = index + direction
-    if (targetIndex < 0 || targetIndex >= categories.length) return
-    const updated = [...categories]
-    const temp = updated[index]
-    updated[index] = updated[targetIndex]
-    updated[targetIndex] = temp
-    setCategories(updated)
+  async function save() {
+    if (!form) return
+    if (form.name.trim().length < 2) return showFlash('error', 'Enter a category name.')
+    const sort = Number(form.sortOrder)
+    if (!Number.isInteger(sort) || sort < 0) return showFlash('error', 'Order must be a whole number, 0 or more.')
+    setSaving(true)
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim(),
+      image: form.image.trim() || '/images/hero_bangles.jpg',
+      sortOrder: sort,
+    }
+    const r = form.id
+      ? await adminRequest(`/api/admin/categories/${form.id}`, 'PATCH', { ...payload, archived: !form.visible })
+      : await adminRequest('/api/admin/categories', 'POST', { ...payload, slug: slugify(form.name) })
+    setSaving(false)
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not save the category.')
+    showFlash('ok', form.id ? 'Category updated.' : 'Category created.')
+    setForm(null)
+    reload()
   }
 
-  const toggleVisibility = (id: string) => {
-    setCategories(
-      categories.map((c) => (c.id === id ? { ...c, isVisible: !c.isVisible } : c))
-    )
+  async function remove(c: Category) {
+    setConfirmDelete(null)
+    const r = await adminRequest(`/api/admin/categories/${c.id}`, 'DELETE')
+    if (!r.ok) return showFlash('error', r.error ?? 'Could not delete the category.')
+    showFlash('ok', `“${c.name}” deleted.`)
+    reload()
   }
 
-  const archiveCategory = (id: string) => {
-    setCategories(categories.filter((c) => c.id !== id))
-    showToast('Category archived.')
-  }
+  const rows = data ?? []
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            background: 'var(--dk)',
-            color: '#fff',
-            padding: '12px 20px',
-            boxShadow: 'var(--shadow-lg)',
-            zIndex: 1000,
-            fontSize: '14px',
-            borderLeft: '4px solid var(--ok)',
-          }}
-        >
-          {toastMessage}
-        </div>
-      )}
+    <div>
+      <PageHeader
+        title="Categories"
+        subtitle="Collections shown in the store menu, home page and footer. Lower order numbers appear first; empty or hidden categories are not shown to customers."
+        actions={<button type="button" className="btn btn-primary" onClick={() => setForm({ ...EMPTY, sortOrder: String(rows.length) })}>Add category</button>}
+      />
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '32px', color: 'var(--dk)', margin: 0 }}>
-            Collection Categories
-          </h1>
-          <p style={{ color: 'var(--tx2)', fontSize: '14px', marginTop: '4px' }}>
-            Organize bridal jewellery taxonomy, storefront navigation hierarchy, and catalog filters.
-          </p>
-        </div>
-
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="btn btn-primary"
-          style={{ fontSize: '13px', padding: '10px 20px' }}
-        >
-          {showAddForm ? '✕ Close Form' : '+ Add New Category'}
-        </button>
-      </div>
-
-      {/* Add New Category Card */}
-      {showAddForm && (
-        <div className="card" style={{ padding: '24px', background: '#FFFDFB', border: '1.5px solid var(--pr)' }}>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: 'var(--dk)', marginBottom: '16px' }}>
-            Create New Category
-          </h2>
-
-          <form onSubmit={handleAddCategory} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-              <label className="input-label">
-                <span>Category Name</span>
-                <input
-                  type="text"
-                  className="input"
-                  required
-                  placeholder="e.g. Bridal Matha Patti"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </label>
-
-              <label className="input-label">
-                <span>Parent Category (Optional)</span>
-                <select
-                  className="input"
-                  value={parent}
-                  onChange={(e) => setParent(e.target.value)}
-                >
-                  <option value="">None (Top-Level Category)</option>
-                  {categories
-                    .filter((c) => !c.parent)
-                    .map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            </div>
-
-            <label className="input-label">
-              <span>Category Description</span>
-              <textarea
-                className="input"
-                rows={2}
-                placeholder="Brief description for SEO and category page header..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </label>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button type="submit" className="btn btn-primary btn-sm">
-                Save Category
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                className="btn btn-outline btn-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Categories Table */}
-      <div className="card" style={{ padding: '24px', background: '#fff' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+      {error ? (
+        <Notice kind="error">{error}</Notice>
+      ) : loading && !data ? (
+        <Notice>Loading categories…</Notice>
+      ) : rows.length === 0 ? (
+        <Notice>No categories yet.</Notice>
+      ) : (
+        <div className="card" style={{ padding: '8px 16px', overflowX: 'auto' }}>
+          <table className="data-table">
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--bd)', color: 'var(--tx2)' }}>
-                <th style={{ padding: '12px' }}>Order</th>
-                <th style={{ padding: '12px' }}>Category Name &amp; URL</th>
-                <th style={{ padding: '12px' }}>Parent Category</th>
-                <th style={{ padding: '12px' }}>Products</th>
-                <th style={{ padding: '12px' }}>Visibility</th>
-                <th style={{ padding: '12px', textAlign: 'right' }}>Actions</th>
+              <tr>
+                <th>Category</th>
+                <th style={{ textAlign: 'right' }}>Products</th>
+                <th>In store</th>
+                <th style={{ textAlign: 'right' }}>Order</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {categories.map((cat, idx) => (
-                <tr key={cat.id} style={{ borderBottom: '1px solid #F0E8E6' }}>
-                  <td style={{ padding: '14px 12px' }}>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button
-                        onClick={() => moveCategory(idx, -1)}
-                        disabled={idx === 0}
-                        style={{
-                          background: 'none',
-                          border: '1px solid var(--bd)',
-                          padding: '2px 8px',
-                          cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                          opacity: idx === 0 ? 0.3 : 1,
-                        }}
-                        title="Move Up"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        onClick={() => moveCategory(idx, 1)}
-                        disabled={idx === categories.length - 1}
-                        style={{
-                          background: 'none',
-                          border: '1px solid var(--bd)',
-                          padding: '2px 8px',
-                          cursor: idx === categories.length - 1 ? 'not-allowed' : 'pointer',
-                          opacity: idx === categories.length - 1 ? 0.3 : 1,
-                        }}
-                        title="Move Down"
-                      >
-                        ▼
-                      </button>
+              {rows.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={c.image} alt="" width={40} height={40} style={{ objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{c.name}</div>
+                        <Link href={`/category/${c.slug}`} target="_blank" style={{ fontSize: '11px' }}>/category/{c.slug}</Link>
+                      </div>
                     </div>
                   </td>
-
-                  <td style={{ padding: '14px 12px' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--dk)', fontSize: '14px' }}>{cat.name}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--tx2)', marginTop: '2px' }}>
-                      <Link href={`/category/${cat.slug}`} target="_blank" style={{ color: 'var(--pr)', textDecoration: 'none' }}>
-                        /category/{cat.slug} ↗
-                      </Link>
-                    </div>
+                  <td style={{ textAlign: 'right' }}>{c.productCount}</td>
+                  <td>
+                    {c.archived ? (
+                      <span className="tag tag-error">Hidden</span>
+                    ) : c.productCount === 0 ? (
+                      <span className="tag tag-warning" title="Categories without products are not shown to customers">Hidden (empty)</span>
+                    ) : (
+                      <span className="tag tag-ok">Shown</span>
+                    )}
                   </td>
-
-                  <td style={{ padding: '14px 12px', color: cat.parent ? 'var(--dk)' : 'var(--tx2)' }}>
-                    {cat.parent || '—'}
-                  </td>
-
-                  <td style={{ padding: '14px 12px', fontWeight: 600 }}>{cat.productCount} pieces</td>
-
-                  <td style={{ padding: '14px 12px' }}>
-                    <span className={`tag ${cat.isVisible ? 'tag-ok' : 'tag-warning'}`}>
-                      {cat.isVisible ? 'Visible' : 'Hidden'}
-                    </span>
-                  </td>
-
-                  <td style={{ padding: '14px 12px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '8px' }}>
-                      <button
-                        onClick={() => toggleVisibility(cat.id)}
-                        className="btn btn-sm btn-outline"
-                        style={{ fontSize: '12px', padding: '4px 10px', minHeight: '30px' }}
-                      >
-                        {cat.isVisible ? 'Hide' : 'Show'}
-                      </button>
-                      <button
-                        onClick={() => archiveCategory(cat.id)}
-                        className="btn btn-sm btn-ghost"
-                        style={{ fontSize: '12px', padding: '4px 10px', minHeight: '30px', color: 'var(--er)' }}
-                      >
-                        Archive
-                      </button>
-                    </div>
+                  <td style={{ textAlign: 'right' }}>{c.sortOrder}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setForm({ id: c.id, name: c.name, description: c.description, image: c.image, sortOrder: String(c.sortOrder), visible: !c.archived })}
+                    >
+                      Edit
+                    </button>{' '}
+                    <button type="button" onClick={() => setConfirmDelete(c)} style={{ background: 'none', border: 0, color: 'var(--er)', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}>
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
+      )}
+
+      {form && (
+        <div role="dialog" aria-modal="true" aria-labelledby="cat-form-title" style={{ position: 'fixed', inset: 0, background: 'rgba(58,21,32,0.45)', zIndex: 1500, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '32px 16px' }}>
+          <form onSubmit={(e) => { e.preventDefault(); save() }} className="card" style={{ background: '#fff', width: '100%', maxWidth: '560px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <h2 id="cat-form-title" style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', color: 'var(--dk)', margin: 0 }}>
+              {form.id ? 'Edit category' : 'Add category'}
+            </h2>
+            <div>
+              <label htmlFor="cf-name" style={labelStyle}>Name *</label>
+              <input id="cf-name" className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              {!form.id && form.name && <div style={{ fontSize: '11px', color: 'var(--tx2)', marginTop: '4px' }}>Address: /category/{slugify(form.name)}</div>}
+            </div>
+            <div>
+              <label htmlFor="cf-desc" style={labelStyle}>Description</label>
+              <textarea id="cf-desc" className="input" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Shown at the top of the category page" />
+            </div>
+            <div>
+              <span style={labelStyle}>Cover image</span>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={form.image || '/images/hero_bangles.jpg'} alt="" width={64} height={64} style={{ objectFit: 'cover', borderRadius: '4px' }} />
+                <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+                <button type="button" className="btn btn-outline btn-sm" disabled={uploading} onClick={() => fileRef.current?.click()}>{uploading ? 'Uploading…' : 'Upload photo'}</button>
+                <input className="input" aria-label="Image path" value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} style={{ flex: '1 1 180px', minWidth: 0 }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label htmlFor="cf-order" style={labelStyle}>Order</label>
+                <input id="cf-order" className="input" type="number" min="0" step="1" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} style={{ width: '100px' }} />
+              </div>
+              {form.id && (
+                <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '13px', paddingBottom: '10px' }}>
+                  <input type="checkbox" checked={form.visible} onChange={(e) => setForm({ ...form, visible: e.target.checked })} /> Show in store
+                </label>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setForm(null)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : form.id ? 'Save changes' : 'Create category'}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div role="alertdialog" aria-modal="true" aria-labelledby="cat-del-title" style={{ position: 'fixed', inset: 0, background: 'rgba(58,21,32,0.45)', zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div className="card" style={{ background: '#fff', maxWidth: '420px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <h2 id="cat-del-title" style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', margin: 0, color: 'var(--dk)' }}>Delete “{confirmDelete.name}”?</h2>
+            <p style={{ fontSize: '14px', color: 'var(--tx2)', margin: 0 }}>
+              {confirmDelete.productCount > 0
+                ? `It still has ${confirmDelete.productCount} product(s), so it can't be deleted. Move them first or hide the category instead.`
+                : 'This can’t be undone.'}
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              {confirmDelete.productCount === 0 && <button type="button" className="btn btn-primary" onClick={() => remove(confirmDelete)}>Delete</button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <FlashMessage flash={flash} onClose={clearFlash} />
     </div>
   )
 }
-
